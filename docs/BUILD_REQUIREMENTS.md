@@ -111,15 +111,26 @@ Configure flags for Wine cross-compilation to Android:
 
 ## Wine Source for Android Builds
 
-Use Winlator's Wine fork which has Android patches:
-```bash
-# Primary source - Winlator's patched Wine
-git clone https://github.com/brunodev85/winlator
-# Or look for their wine fork specifically
+The reference `.wcp` binary strings reveal exactly how it was built:
+- **Wine version:** `wine-10.0` (stable release)
+- **Build path:** `/home/endeavour/Documenti/SourceCodes/wine-arm64ec-10/`
+- **Compiler:** Android NDK 27.0.12077973 (r27c), Clang 18.0.1
+- **Winlator target path:** `/data/data/com.winlator.cmod/files/imagefs/usr/`
 
-# Reference: Wine mainline (needs Android patches applied)
-git clone https://gitlab.winehq.org/wine/wine.git
+The builder applied arm64ec patches locally to Wine 10.0 — there is **no public fork**.
+The closest available public source is the Wine GitHub mirror at the `wine-10.0` tag:
+
+```bash
+# Wine 10.0 stable (GitHub mirror of WineHQ)
+git clone --depth=1 --branch wine-10.0 https://github.com/wine-mirror/wine wine-source
+
+# For latest Wine development (wine-next branch):
+git clone --depth=1 --branch wine-next https://github.com/wine-mirror/wine wine-source
 ```
+
+**Important:** This is mainline Wine without Android/arm64ec patches. You will need
+to apply arm64ec patches from the Wine mailing list or community sources before the
+build will produce correct ARM64EC binaries for Winlator.
 
 ## GitHub Actions Considerations
 

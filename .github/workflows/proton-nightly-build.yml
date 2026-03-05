@@ -8,7 +8,7 @@ on:
       wine_ref:
         description: 'Wine source ref (branch, tag, or commit)'
         required: false
-        default: 'wine-10.0'
+        default: 'master'
       debug:
         description: 'Enable debug output'
         required: false
@@ -18,12 +18,11 @@ env:
   NDK_VERSION: android-ndk-r27c
   # NDK 27.0.12077973 = r27c; clang 18.0.1 — matches reference build exactly
   ANDROID_API: 28
-  # Wine source: wine-mirror/wine is the GitHub mirror of WineHQ mainline.
-  # The reference .wcp was built from Wine 10.0 stable with local arm64ec patches
-  # by an individual builder (not a public fork). wine-mirror/wine is the closest
-  # public equivalent. Set WINE_REF to the stable tag you want to build.
-  WINE_SOURCE_REPO: https://github.com/wine-mirror/wine
-  WINE_REF: ${{ github.event.inputs.wine_ref || 'wine-10.0' }}
+  # twaik/wine is the actively-maintained Wine fork with Android NDK fixes,
+  # merged via WineHQ MRs 9977 and 10067. Updated daily, ahead of mainline.
+  # Alternative: https://github.com/wine-mirror/wine at tag wine-10.0
+  WINE_SOURCE_REPO: https://gitlab.winehq.org/twaik/wine
+  WINE_REF: ${{ github.event.inputs.wine_ref || 'master' }}
 
 jobs:
   build:
@@ -121,20 +120,27 @@ jobs:
 
       - name: Configure ccache
         run: |
-          export CCACHE_DIR="$HOME/.ccache"
           ccache --max-size=4G
           echo "CCACHE_DIR=$HOME/.ccache" >> $GITHUB_ENV
-          echo "CC=ccache aarch64-linux-android${{ env.ANDROID_API }}-clang" >> $GITHUB_ENV
-          echo "CXX=ccache aarch64-linux-android${{ env.ANDROID_API }}-clang++" >> $GITHUB_ENV
+          # Store cross-compiler paths for later steps; do NOT export as CC/CXX
+          # globally — the host tools configure must use the native host compiler.
+          TOOLCHAIN="$(pwd)/${{ env.NDK_VERSION }}/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "NDK_TOOLCHAIN=${TOOLCHAIN}" >> $GITHUB_ENV
+          echo "CROSS_CC=ccache ${TOOLCHAIN}/aarch64-linux-android${{ env.ANDROID_API }}-clang" >> $GITHUB_ENV
+          echo "CROSS_CXX=ccache ${TOOLCHAIN}/aarch64-linux-android${{ env.ANDROID_API }}-clang++" >> $GITHUB_ENV
+          echo "CROSS_AR=${TOOLCHAIN}/llvm-ar" >> $GITHUB_ENV
+          echo "CROSS_STRIP=${TOOLCHAIN}/llvm-strip" >> $GITHUB_ENV
 
       # --------------------------------------------------------
       # 7. Build host wine-tools
       # --------------------------------------------------------
       - name: Build host wine-tools
+        # Must use the native host compiler (not the NDK cross-compiler).
+        # CC/CXX are explicitly unset here to prevent any env leakage.
         run: |
           mkdir -p wine-build/tools
           cd wine-build/tools
-          ../../wine-source/configure \
+          env -u CC -u CXX ../../wine-source/configure \
             --enable-win64 \
             --without-x \
             --without-freetype
@@ -147,12 +153,10 @@ jobs:
         run: |
           mkdir -p wine-build/target
           cd wine-build/target
-          TOOLCHAIN="$(pwd)/../../${{ env.NDK_VERSION }}/toolchains/llvm/prebuilt/linux-x86_64/bin"
-          TARGET="aarch64-linux-android${{ env.ANDROID_API }}"
           ../../wine-source/configure \
             --host=aarch64-linux-android \
             --with-wine-tools="$(pwd)/../tools" \
-            --prefix=/data/data/com.winlator/wine \
+            --prefix=/data/data/com.winlator.cmod/files/imagefs/usr/opt/wine \
             --bindir=bin \
             --libdir=lib \
             --enable-archs=aarch64,i386 \
@@ -162,12 +166,12 @@ jobs:
             --without-openldap \
             --without-sane \
             --without-netapi \
-            CC="${{ env.CC }}" \
-            CXX="${{ env.CXX }}" \
-            AR="${TOOLCHAIN}/llvm-ar" \
-            STRIP="${TOOLCHAIN}/llvm-strip" \
-            TARGETCC="aarch64-linux-android${{ env.ANDROID_API }}-clang" \
-            TARGETCXX="aarch64-linux-android${{ env.ANDROID_API }}-clang++" \
+            CC="${{ env.CROSS_CC }}" \
+            CXX="${{ env.CROSS_CXX }}" \
+            AR="${{ env.CROSS_AR }}" \
+            STRIP="${{ env.CROSS_STRIP }}" \
+            TARGETCC="${{ env.NDK_TOOLCHAIN }}/aarch64-linux-android${{ env.ANDROID_API }}-clang" \
+            TARGETCXX="${{ env.NDK_TOOLCHAIN }}/aarch64-linux-android${{ env.ANDROID_API }}-clang++" \
             CFLAGS="-O2 -DANDROID -fPIC" \
             LDFLAGS="-Wl,--build-id=sha1"
 
@@ -188,17 +192,16 @@ jobs:
           mkdir -p "$INSTALL_DIR"
           make -C wine-build/target install DESTDIR="$INSTALL_DIR"
 
-          # Flatten prefix path to bin/ lib/ share/
-          PREFIX_INNER="$INSTALL_DIR/data/data/com.winlator/wine"
+          # Flatten the prefix path (matches --prefix set in configure step)
+          PREFIX_INNER="$INSTALL_DIR/data/data/com.winlator.cmod/files/imagefs/usr/opt/wine"
           if [[ -d "$PREFIX_INNER" ]]; then
             cp -r "$PREFIX_INNER/." "$INSTALL_DIR/"
             rm -rf "$INSTALL_DIR/data"
           fi
 
-          # Strip debug symbols
-          TOOLCHAIN="${{ env.NDK_VERSION }}/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          # Strip debug symbols using NDK strip
           find "$INSTALL_DIR/lib/wine/aarch64-unix" -name "*.so" \
-            -exec "${TOOLCHAIN}/llvm-strip" --strip-debug {} \;
+            -exec "${{ env.CROSS_STRIP }}" --strip-debug {} \;
 
           echo "Install directory contents:"
           ls -lh "$INSTALL_DIR"
