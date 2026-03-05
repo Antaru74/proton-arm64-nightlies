@@ -203,38 +203,32 @@ jobs:
       # --------------------------------------------------------
       - name: Add prefixPack.txz
         run: |
-          # Download reference prefixPack.txz if we don't have a better one
-          # This is the default Wine prefix - rarely changes between builds
-          curl -L -o wine-install/prefixPack.txz \
-            "https://github.com/K11MCH1/Winlator101/releases/download/wine_col/Proton-10-arm64ec-controller-fix.wcp" \
-            --range "0-$(python3 -c "
-import zstandard, tarfile, io
-with open('/dev/stdin', 'rb') as f: pass  # placeholder
-print(0)
-")" || true
+          # Write extraction script to a file to avoid YAML/heredoc issues
+          cat > /tmp/extract_prefix.py << 'SCRIPTEND'
+import zstandard, tarfile, sys, os, urllib.request
 
-          # Simpler: extract just prefixPack.txz from reference build
-          python3 << 'PYEOF'
-          import zstandard, tarfile, sys, os
+ref_url = "https://github.com/K11MCH1/Winlator101/releases/download/wine_col/Proton-10-arm64ec-controller-fix.wcp"
+out_path = "wine-install/prefixPack.txz"
 
-          ref_url = "https://github.com/K11MCH1/Winlator101/releases/download/wine_col/Proton-10-arm64ec-controller-fix.wcp"
-          import urllib.request
+print("Downloading reference .wcp to extract prefixPack.txz...")
+with urllib.request.urlopen(ref_url) as response:
+    dctx = zstandard.ZstdDecompressor()
+    with dctx.stream_reader(response) as reader:
+        with tarfile.open(fileobj=reader, mode="r|") as tf:
+            for member in tf:
+                name = member.name.lstrip("./")
+                if name == "prefixPack.txz":
+                    f = tf.extractfile(member)
+                    if f:
+                        with open(out_path, "wb") as out:
+                            out.write(f.read())
+                        print("Extracted prefixPack.txz ({} bytes)".format(os.path.getsize(out_path)))
+                        sys.exit(0)
 
-          print("Downloading reference .wcp to extract prefixPack.txz...")
-          with urllib.request.urlopen(ref_url) as response:
-              dctx = zstandard.ZstdDecompressor()
-              with dctx.stream_reader(response) as reader:
-                  with tarfile.open(fileobj=reader, mode='r|') as tf:
-                      for member in tf:
-                          if member.name == './prefixPack.txz' or member.name == 'prefixPack.txz':
-                              f = tf.extractfile(member)
-                              if f:
-                                  with open('wine-install/prefixPack.txz', 'wb') as out:
-                                      out.write(f.read())
-                                  print(f"Extracted prefixPack.txz ({os.path.getsize('wine-install/prefixPack.txz')} bytes)")
-                                  sys.exit(0)
-          print("WARNING: prefixPack.txz not found in reference build")
-          PYEOF
+print("WARNING: prefixPack.txz not found in reference build")
+sys.exit(1)
+SCRIPTEND
+          python3 /tmp/extract_prefix.py
 
       # --------------------------------------------------------
       # 12. Generate profile.json
