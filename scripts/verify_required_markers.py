@@ -11,7 +11,7 @@ import sys
 REQUIRED_ANY = [
     (
         "dlls/wow64/process.c",
-        ["Wow64SuspendLocalThread", "wow64_NtSuspendThread"],
+        ["RtlWow64SuspendThread", "wow64_NtSuspendThread"],
         "wow64 suspend entrypoint"
     ),
     (

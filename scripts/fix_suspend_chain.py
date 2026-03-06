@@ -60,20 +60,6 @@ def patch_wow64_process(path):
     if rc < 0:
         ok = False
 
-    sig = "NTSTATUS WINAPI Wow64SuspendLocalThread( HANDLE thread, ULONG *count )"
-    if sig in src:
-        print("  [add Wow64SuspendLocalThread export implementation] already applied, skipping")
-    else:
-        print("  [add Wow64SuspendLocalThread export implementation] applied")
-        src += (
-            "\n\n/**********************************************************************\n"
-            " *           Wow64SuspendLocalThread  (wow64.@)\n"
-            " */\n"
-            "NTSTATUS WINAPI Wow64SuspendLocalThread( HANDLE thread, ULONG *count )\n"
-            "{\n"
-            "    return NtSuspendThread( thread, count );\n"
-            "}\n"
-        )
 
     with open(path, "w") as f:
         f.write(src)
@@ -83,7 +69,7 @@ def patch_wow64_process(path):
 
 def verify_markers(wine_src):
     checks = [
-        ("dlls/wow64/process.c", ["Wow64SuspendLocalThread", "RtlWow64SuspendThread"]),
+        ("dlls/wow64/process.c", ["RtlWow64SuspendThread"]),
         ("server/thread.h", ["bypass_proc_suspend"]),
         ("server/thread.c", ["get_effective_proc_suspend", "bypass_proc_suspend"]),
         ("server/process.c", ["!thread->bypass_proc_suspend"]),
