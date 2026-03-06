@@ -77,6 +77,11 @@ jobs:
           cp -r gamenative-src/build-scripts wine-source/build-scripts
           rm -rf gamenative-src
 
+          # Normalize patch line endings (some upstream patches can be CRLF and
+          # fail under git apply as "corrupt patch" despite valid content).
+          find wine-source/android/patches -type f -name "*.patch" -exec sed -i 's/\r$//' {} +
+
+
           # Comment out patches already merged into bleeding-edge (or handled by
           # fix_*.py scripts) so they don't get double-applied or fail the build.
           python3 scripts/filter_patches.py \
@@ -89,10 +94,10 @@ jobs:
             wine-source/build-scripts/build-step-arm64ec.sh
 
           # Apply Android-specific window.c changes (xinput2 guards, class_hints,
-          # _NET_WM_PID) via script — the patch is too drifted to apply cleanly.
+          # _NET_WM_PID) via script - the patch is too drifted to apply cleanly.
           python3 scripts/fix_window_c.py wine-source
 
-          # Exclude FEX stats shm block on Android — shm_open is in libc but
+          # Exclude FEX stats shm block on Android - shm_open is in libc but
           # the ntdll.so link step doesn't pull it in, causing undefined symbol.
           python3 scripts/fix_virtual_c.py wine-source
 
@@ -178,6 +183,10 @@ jobs:
           cd wine-source
           bash build-scripts/build-step-arm64ec.sh --configure
 
+      - name: Verify critical patch markers
+        run: |
+          python3 scripts/verify_required_markers.py wine-source
+
       - name: Build Proton
         run: |
           cd wine-source
@@ -221,7 +230,7 @@ jobs:
           echo "=== OUTPUT_DIR bin contents after copy ==="
           ls -la "$OUTPUT_DIR/bin/"
 
-          # Box64 looks for 'wine' in bin/ — Wine normally installs a 'wine' shell
+          # Box64 looks for 'wine' in bin/ ? Wine normally installs a 'wine' shell
           # wrapper. If it's missing (only wine64 present), create a symlink.
           if [ ! -e "$OUTPUT_DIR/bin/wine" ] && [ -f "$OUTPUT_DIR/bin/wine64" ]; then
             ln -s wine64 "$OUTPUT_DIR/bin/wine"
@@ -229,7 +238,7 @@ jobs:
           elif [ -e "$OUTPUT_DIR/bin/wine" ]; then
             echo "wine present: $(file "$OUTPUT_DIR/bin/wine")"
           else
-            echo "ERROR: neither wine nor wine64 found in $OUTPUT_DIR/bin/ — build incomplete"
+            echo "ERROR: neither wine nor wine64 found in $OUTPUT_DIR/bin/ ? build incomplete"
             exit 1
           fi
 
@@ -255,7 +264,7 @@ jobs:
 
           mkdir -p "$GITHUB_WORKSPACE/output"
 
-          # versionCode: always 0 � avoids ambiguity when GameNative reconstructs
+          # versionCode: always 0 ? avoids ambiguity when GameNative reconstructs
           # the entry name as verName+"-"+versionCode (date already in verName)
           VERSION_CODE=1
 
@@ -266,7 +275,7 @@ jobs:
           #   -> installs to imagefs/opt/proton-10.0-nightly-...-arm64ec/
           PROFILE_VERSION="${VERSION#proton-}"
 
-          # Proton profile — for standard Winlator / GameNative
+          # Proton profile ? for standard Winlator / GameNative
           python3 scripts/generate_profile.py \
             "${OUTPUT_DIR}/profile.json" \
             "${PROFILE_VERSION}" \
@@ -277,7 +286,7 @@ jobs:
           tar --zstd -cf "$GITHUB_WORKSPACE/output/proton-${VERSION}.wcp" \
             bin lib share prefixPack.txz profile.json
 
-          # Wine profile — for Winlator CMOD / Ludashi
+          # Wine profile ? for Winlator CMOD / Ludashi
           python3 "$GITHUB_WORKSPACE/scripts/generate_profile.py" \
             "${OUTPUT_DIR}/profile.json" \
             "${PROFILE_VERSION}" \
@@ -309,7 +318,7 @@ jobs:
           TAG="nightly-${GIT_DATE}-${GIT_HASH}"
           gh release create "$TAG" output/* \
             --title "Proton 10 ARM64 Nightly (${GIT_DATE})" \
-            --notes "Built from ValveSoftware/wine bleeding-edge @ ${GIT_HASH} with GameNative Android + ARM64EC patches. Automated nightly — use at your own risk." \
+            --notes "Built from ValveSoftware/wine bleeding-edge @ ${GIT_HASH} with GameNative Android + ARM64EC patches. Automated nightly ? use at your own risk." \
             --prerelease \
             || gh release upload "$TAG" output/* --clobber
         env:
@@ -343,3 +352,6 @@ jobs:
           git diff --staged --quiet || git commit -m "chore: update latest.json for nightly ${GIT_DATE}"
           git pull --rebase origin HEAD
           git push
+
+
+

@@ -14,12 +14,11 @@ import sys
 # Maps patch filename -> (file to check, unique string added by the patch).
 # If the unique string is already in the file, the patch is skipped.
 ALREADY_APPLIED = {
-    # Handled by fix_window_c.py — skip the patch regardless so git apply never sees it.
+    # Handled by fix_window_c.py - skip this patch so git apply never sees it.
     # The patch line numbers are too drifted against bleeding-edge to apply cleanly.
     "dlls_winex11_drv_window_c.patch":      ("dlls/winex11.drv/window.c",    "steam_proton"),
 
-    # Handled by fix_wow64_process_c.py — the patch is corrupt (CRLF issue at line 41).
-    "test-bylaws/dlls_wow64_process_c.patch": ("dlls/wow64/process.c",       "wow64_NtSuspendThread"),
+    # Keep wow64/process patch active unless the suspend marker is already present.
 
     # These are all merged into ValveSoftware/wine bleeding-edge already.
     "dlls_ntdll_loader_c.patch":            ("dlls/ntdll/loader.c",          "libarm64ecfex.dll"),
@@ -93,3 +92,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
