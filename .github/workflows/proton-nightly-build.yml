@@ -61,8 +61,7 @@ jobs:
             zlib1g-dev:i386 \
             zstd \
             xz-utils \
-            python3-pip
-          pip3 install zstandard --quiet
+            python3-zstandard
 
       - name: Clone Wine source (ValveSoftware bleeding-edge)
         run: |
