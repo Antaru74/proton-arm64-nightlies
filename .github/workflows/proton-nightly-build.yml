@@ -74,13 +74,28 @@ jobs:
       - name: Clone Wine source (ValveSoftware bleeding-edge)
         run: |
           rm -rf wine-source
-          git clone --depth=1 --branch bleeding-edge \
-            https://github.com/ValveSoftware/wine wine-source
-
+          WINE_REF="${{ github.event.inputs.wine_ref || 'bleeding-edge' }}"
+          git clone --depth=1 --branch "$WINE_REF" \
+            https://github.com/ValveSoftware/wine wine-source \
+          || {
+            git clone --depth=1 https://github.com/ValveSoftware/wine wine-source
+            git -C wine-source fetch --depth=1 origin "$WINE_REF"
+            git -C wine-source checkout FETCH_HEAD
+          }
+          echo "Wine ref: $WINE_REF"
+          git -C wine-source rev-parse HEAD
       - name: Clone GameNative patches and build scripts
         run: |
-          git clone --depth=1 --branch proton_10.0 \
-            https://github.com/GameNative/proton-wine gamenative-src
+          GN_REF="${{ github.event.inputs.gamenative_ref || 'proton_10.0' }}"
+          git clone --depth=1 --branch "$GN_REF" \
+            https://github.com/GameNative/proton-wine gamenative-src \
+          || {
+            git clone --depth=1 https://github.com/GameNative/proton-wine gamenative-src
+            git -C gamenative-src fetch --depth=1 origin "$GN_REF"
+            git -C gamenative-src checkout FETCH_HEAD
+          }
+          echo "GameNative ref: $GN_REF"
+          git -C gamenative-src rev-parse HEAD
           cp -r gamenative-src/android wine-source/android
           cp -r gamenative-src/build-scripts wine-source/build-scripts
           rm -rf gamenative-src
@@ -367,6 +382,7 @@ jobs:
           git diff --staged --quiet || git commit -m "chore: update latest.json for nightly ${GIT_DATE}"
           git pull --rebase origin HEAD
           git push
+
 
 
 
