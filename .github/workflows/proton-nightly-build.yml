@@ -95,7 +95,7 @@ jobs:
             python3-zstandard \
             patch
 
-      - name: Clone Wine source (ValveSoftware proton_10.0 by default)
+      - name: Clone Wine source (ValveSoftware bleeding-edge by default)
         run: |
           rm -rf wine-source
           WINE_REF="${{ github.event.inputs.wine_ref || 'bleeding-edge' }}"
@@ -143,6 +143,11 @@ jobs:
           # Apply Android-specific window.c changes (xinput2 guards, class_hints,
           # _NET_WM_PID) via script - the patch is too drifted to apply cleanly.
           python3 scripts/fix_window_c.py wine-source
+
+          # Ensure initialize_xstate_features is declared before use for PE
+          # cross-compile targets (aarch64-windows, arm64ec-windows) where
+          # none of the native arch macros are defined.
+          python3 scripts/fix_wineboot_c.py wine-source
 
           # Exclude FEX stats shm block on Android - shm_open is in libc but
           # the ntdll.so link step doesn't pull it in, causing undefined symbol.

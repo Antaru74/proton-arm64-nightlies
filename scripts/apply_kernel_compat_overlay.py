@@ -49,8 +49,8 @@ def main() -> int:
             print(f"ERROR: donor missing file: {src}")
             return 2
         if not os.path.exists(dst):
-            print(f"ERROR: target missing file: {dst}")
-            return 3
+            print(f"SKIP: target missing file (not built): {dst}")
+            continue
 
         backup = dst + ".pre-kernel-compat.bak"
         if not os.path.exists(backup):
