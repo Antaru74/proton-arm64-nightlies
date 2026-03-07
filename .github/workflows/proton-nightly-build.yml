@@ -361,12 +361,13 @@ jobs:
 
           mkdir -p "$GITHUB_WORKSPACE/output"
 
-          # GameNative hardcodes winePath=/opt/wine regardless of profile lookup result.
-          # Profile lookup also has a bug where it strips the Type prefix before comparing,
-          # causing every custom Proton to fail lookup and fall back to /opt/wine anyway.
-          # By setting versionName="wine", GameNative installs the WCP directly to
-          # /opt/wine/ so the hardcoded fallback path works correctly.
-          PROFILE_VERSION="wine"
+          # WineInfo.java parses the identifier with this regex:
+          #   ^(wine|proton|Proton)-([0-9.]+)(?:-([0-9.]+))?-(x86|x86_64|arm64ec)(?:-([0-9]+))?$
+          # Version must be purely numeric (dots only), arch must be arm64ec/x86_64/x86.
+          # Nightly date/hash go in the description only - not the version string.
+          # GameNative also prepends "proton-" to versionName if it doesn't already
+          # start with "proton", so we omit it here.
+          PROFILE_VERSION="10.0-arm64ec"
           VERSION_CODE=1
 
           # Proton profile - for standard Winlator / GameNative
