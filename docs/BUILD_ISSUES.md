@@ -1,130 +1,54 @@
 # Known Build Issues and Solutions
 
-## Issue 1: .wcp is Zstandard, not XZ
+## Issue 1: Wrong artifact format used for the target app
 
-**Symptom:** `xz -d file.wcp` fails with "not an xz file"
+**Symptom:** Import fails, or the consumer rejects the package.
 
-**Root cause:** The spec assumed XZ compression but the actual format is Zstandard.
+**Cause:** This repo produces two different package formats:
 
-**Detection:**
-```bash
-file Proton-10-arm64ec-controller-fix.wcp
-# Output: Zstandard compressed data (v0.8+), Dictionary ID: None
+- `proton-*.wcp` is Zstandard-compressed and targets GameNative Proton import
+- `proton-wine-*.wcp.xz` is XZ-compressed and targets Ludashi/CMOD-style import
+
+**Fix:** Use the artifact that matches the target app.
+
+## Issue 2: Stock GameNative does not recognize non-numeric Proton versions
+
+**Symptom:** The build imports, but the app does not classify it correctly as ARM64EC Proton.
+
+**Cause:** Stock GameNative's existing parser only accepts numeric Proton version identifiers.
+
+**Fix:** Keep the internal profile version numeric. The workflow currently uses:
+
+```text
+10.0.99-arm64ec
 ```
 
-**Solution:** Use `zstd` to decompress, or use Python's `zstandard` library.
+while still keeping the external release naming on `bleeding-edge`.
 
-```bash
-# Install zstd on Ubuntu/Debian
-sudo apt-get install zstd
+## Issue 3: Runtime built against `/opt/wine` instead of the imported Proton path
 
-# Decompress
-zstd -d file.wcp -o file.tar
-tar -xf file.tar
+**Symptom:** Wine starts and then dies during early startup with errors like `could not load kernel32.dll`.
+
+**Cause:** The runtime was built against `/opt/wine`, but the package was imported under `/opt/proton-*`.
+
+**Fix:** Keep the baked install path aligned with the internal profile version. The current workflow bakes:
+
+```text
+/data/data/com.winlator.cmod/files/imagefs/opt/proton-10.0.99-arm64ec
 ```
 
----
+## Issue 4: Drift in GameNative patch application
 
-## Issue 2: profile.json type is "Proton" not "Wine"
+**Symptom:** Build breaks during patching or later during ARM64EC linking.
 
-**Symptom:** Package not recognized by Winlator or shows as wrong type.
+**Cause:** The GameNative patch stack drifts against Valve `bleeding-edge`.
 
-**Root cause:** The spec assumed `"type": "Wine"` but the correct value is `"type": "Proton"`.
+**Fix:** This repo uses local fix scripts to patch around drift. If bleeding-edge moves again, update those scripts instead of assuming the upstream patch series still applies unchanged.
 
-**Solution:** Always use:
-```json
-{
-  "type": "Proton",
-  ...
-  "proton": {
-    "binPath": "bin",
-    "libPath": "lib",
-    "prefixPack": "prefixPack.txz"
-  }
-}
-```
+## Issue 5: Donor overlay confusion
 
----
+**Symptom:** It is unclear whether a working build depends on donor files.
 
-## Issue 3: Valve's ARM64 SDK Cannot Build Winlator Proton
+**Cause:** Earlier workflow iterations had an optional donor/kernel compatibility overlay.
 
-**Symptom:** Build fails with linker errors referencing glibc symbols.
-
-**Root cause:** Valve's `proton/sniper/sdk/arm64/llvm` targets desktop Linux ARM64 (glibc).
-Winlator requires Android (bionic) ARM64 builds.
-
-**Solution:** Use the Android NDK r27 instead. The reference binary shows:
-```
-interpreter /system/bin/linker64, for Android 28, built by NDK r27
-```
-
----
-
-## Issue 4: Wine Mainline Doesn't Build for Android
-
-**Symptom:** Configure fails with missing headers or link errors against bionic.
-
-**Root cause:** Wine mainline targets glibc Linux. Building for Android/bionic requires patches.
-
-**Solution:** Use Winlator's patched Wine source or apply Android patches from:
-- Winlator source repo (brunodev85/winlator)
-- Wine-Android project patches
-
----
-
-## Issue 5: No zstd Binary on Windows
-
-**Symptom:** Cannot create .wcp files on Windows without zstd binary.
-
-**Solution:** Use Python's `zstandard` library:
-```bash
-pip install zstandard
-python create-proton-wcp.py <input_dir> <output.wcp>
-```
-
-The `create-proton-wcp.sh` script handles this automatically by detecting whether
-`zstd` binary is available and falling back to Python.
-
----
-
-## Issue 6: GitHub Actions Disk Space
-
-**Symptom:** Build fails with "No space left on device"
-
-**Root cause:** Standard runners have ~14 GB disk; Proton build needs ~40 GB.
-
-**Mitigation options:**
-1. Free disk space before build:
-   ```yaml
-   - name: Free disk space
-     run: |
-       sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
-       df -h
-   ```
-2. Use a self-hosted runner with adequate disk
-3. Use ccache and cache build artifacts between runs
-
----
-
-## Issue 7: Build Timeout on GitHub Actions
-
-**Symptom:** Job killed after 6 hours.
-
-**Mitigation:**
-- Use ccache (saves 50-70% of build time after first run)
-- Split build into multiple jobs with artifact passing
-- Use self-hosted runner (no time limit)
-- Build only changed components
-
----
-
-## Issue 8: prefixPack.txz Generation
-
-**Symptom:** Missing default Wine prefix; Winlator shows errors on first launch.
-
-**Root cause:** `prefixPack.txz` is not a build artifact - it's a pre-initialized Wine prefix.
-
-**Solution:**
-1. Reuse the `prefixPack.txz` from the reference build (it rarely changes)
-2. Or generate a fresh one by running `wineboot --init` with the new Wine build
-   and archiving `~/.wine/` as `prefixPack.txz`
+**Fix:** The current workflow no longer includes any donor or kernel compatibility overlay. If a build works now, it is working on its own compiled runtime.

@@ -1,127 +1,85 @@
-# User Guide: Proton 10 ARM64 Nightly Builds for Winlator
+# User Guide: Proton ARM64 Bleeding-Edge Builds
 
-## What Are These Builds?
+## What These Builds Are
 
-These are nightly builds of **Proton 10** (a Wine-based compatibility layer)
-compiled for **ARM64 Android** devices. They let you run Windows games on
-Android through Winlator Cmod.
+These are automated Proton ARM64 builds for Android, intended primarily for GameNative. They are built from Valve's `bleeding-edge` Wine branch and patched with GameNative's Android and ARM64EC changes.
 
-Unlike official Proton (which targets desktop Linux), these builds target
-Android's native runtime (bionic/NDK), enabling use on Android devices
-without desktop Linux dependencies.
+There are two package variants:
+
+- `proton-*.wcp` for GameNative
+- `proton-wine-*.wcp.xz` for Ludashi/CMOD-style imports
 
 ## Requirements
 
-- Android device with ARM64 processor
-- Winlator Cmod (latest version recommended)
-- ~500 MB free storage for the .wcp file
-- ~2-3 GB free storage for the installed Wine environment
+- ARM64 Android device
+- GameNative, or another compatible Winlator-derived app
+- About 500 MB free for the downloaded package
+- About 2-3 GB free for the imported runtime
 
-## How to Download
+## Downloading
 
-### Latest Nightly
+1. Open the repository's **Releases** page
+2. Find the latest release tagged `bleeding-edge-YYYYMMDD-HASH`
+3. Download:
+   - `proton-*.wcp` for GameNative
+   - `proton-wine-*.wcp.xz` for Ludashi/CMOD
+4. Optionally download the matching `.sha256` file
 
-1. Go to the **Releases** page of this repository
-2. Find the latest release tagged `nightly-YYYYMMDD-HASH`
-3. Download the `.wcp` file (e.g., `proton-10-arm64ec-nightly-20260305-abc1234.wcp`)
-4. Download the `.sha256` file to verify integrity
-
-### Verify Download (Optional but Recommended)
+## Verifying the Download
 
 ```bash
-# On Linux/Mac:
-sha256sum -c proton-10-arm64ec-nightly-20260305-abc1234.wcp.sha256
+# Linux/macOS
+sha256sum -c proton-proton-bleeding-edge-20260305-abc1234-arm64ec.wcp.sha256
 
-# On Windows (PowerShell):
-Get-FileHash proton-10-arm64ec-nightly-20260305-abc1234.wcp -Algorithm SHA256
+# Windows PowerShell
+Get-FileHash proton-proton-bleeding-edge-20260305-abc1234-arm64ec.wcp -Algorithm SHA256
 ```
 
-## How to Install in Winlator Cmod
+## Installing in GameNative
 
-### Method 1: Import via Winlator UI (Recommended)
+1. Copy the `.wcp` file to the device
+2. Open GameNative
+3. Go to the Wine/Proton import screen
+4. Select the downloaded `.wcp`
+5. Wait for import to finish
+6. Select the imported version in the container settings
 
-1. Copy the `.wcp` file to your Android device (internal storage or SD card)
-2. Open **Winlator Cmod**
-3. Tap the **menu** icon (three lines) or go to **Settings**
-4. Navigate to **Wine Version** or **Wine Configuration**
-5. Tap **Import** or the **+** button
-6. Browse to and select your `.wcp` file
-7. Wait for the import to complete (may take 1-2 minutes)
-8. The new version will appear in the Wine version list
+## Important Compatibility Note
 
-### Method 2: Manual Installation
+The visible release naming uses `bleeding-edge`, but the internal profile version is numeric: `10.0.99-arm64ec`.
 
-If the UI import fails:
-1. Use a file manager to navigate to Winlator's data directory
-2. Place the `.wcp` in the appropriate wines folder
-3. Restart Winlator
+That is intentional. Stock GameNative's existing parser only recognizes ARM64EC Proton if the internal version stays numeric.
 
-## Selecting the Nightly Build
+## Common Problems
 
-After installation:
-1. Open Winlator Cmod
-2. Edit your container or create a new one
-3. In container settings, find **Wine Version**
-4. Select `10-arm64ec-nightly-YYYYMMDD-HASH` from the dropdown
-5. Save and launch
+**The imported version does not appear**
 
-## Known Issues
+- Make sure you used the `.wcp` artifact for GameNative
+- Restart the app after import
+- Confirm the download finished correctly
 
-### Compared to Proton-10-arm64ec-controller-fix.wcp (Reference)
+**The app rejects the file**
 
-| Feature | Reference Build | Nightly Build |
-|---------|---------------|---------------|
-| Controller fix patch | Included | May not be included |
-| Stability | Tested | Bleeding edge, may have regressions |
-| Update frequency | Manual | Daily |
-| Source | K11MCH1 | Automated build |
+- Use `.wcp` for GameNative
+- Use `.wcp.xz` only for Ludashi/CMOD-style imports
 
-### Common Problems
+**A game crashes after startup**
 
-**"Wine version not appearing after import"**
-- Ensure the file downloaded completely (check SHA256)
-- Try restarting Winlator after import
-- Check available storage space
+- That is now a game/runtime issue, not a packaging bootstrap issue
+- Collect logcat and include the release tag when reporting it
 
-**"Game crashes immediately"**
-- Nightly builds may have regressions; try the reference build
-- Check Winlator's log output for errors
-- Report the issue with the specific nightly build date
+## Reporting Problems
 
-**"Import fails or errors"**
-- Ensure you're using Winlator Cmod, not the base Winlator
-- The `.wcp` format requires a compatible Winlator version
+Include:
 
-## How to Report Problems
+- Release tag
+- Exact artifact filename
+- Device model
+- Android version
+- App name and version
+- Game name
+- Relevant logs
 
-1. Open an **Issue** on this repository
-2. Include:
-   - The nightly build date/hash (from the filename)
-   - Your device model and Android version
-   - Winlator Cmod version
-   - The game or app you're trying to run
-   - Error messages or logs from Winlator
+## Rolling Back
 
-## Rollback to a Previous Version
-
-All nightly builds are kept in GitHub Releases. To go back:
-1. Open **Releases** in this repository
-2. Find the date you want to roll back to
-3. Download and install that `.wcp` file
-4. Select it in Winlator's container settings
-
-## Comparison: Nightly vs Reference Build
-
-The reference build (`Proton-10-arm64ec-controller-fix.wcp` by K11MCH1) is:
-- Manually tested and more stable
-- May lag behind the latest Wine development
-- Includes specific controller compatibility fixes
-
-The nightly builds are:
-- Automatically built from the latest source
-- Potentially include the newest Wine improvements and bug fixes
-- May introduce new bugs (bleeding edge)
-- Good for testing specific Wine improvements
-
-**Recommendation:** Use the reference build for stability. Switch to nightlies
-to test specific bugs that may be fixed in newer Wine.
+Older builds remain in GitHub Releases. Download the earlier artifact you want and re-import it.
