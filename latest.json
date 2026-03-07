@@ -1,14 +1,14 @@
 {
-  "versionName": "10-arm64ec-nightly-20260305-61cbb05",
+  "versionName": "proton-10.0-nightly-20260305-61cbb05-arm64ec",
   "date": "20260305",
   "gitHash": "61cbb05",
   "wcp": {
-    "fileName": "proton-10-arm64ec-nightly-20260305-61cbb05.wcp",
-    "sha256": "129340d43b32923039b041a24c4e12047c3978deeae67d1316be9bda5218e0d0"
+    "fileName": "proton-proton-10.0-nightly-20260305-61cbb05-arm64ec.wcp",
+    "sha256": "a0fd76c1587248ceb21bc1aa34039624518dde2be04e81d338bd432eefa270ef"
   },
   "wcpxz": {
-    "fileName": "proton-wine-10-arm64ec-nightly-20260305-61cbb05.wcp.xz",
-    "sha256": "a71f033f519c45bc3583a03c5bee9fc365fccb97be9dd1b60f4a18847784d6ec"
+    "fileName": "proton-wine-proton-10.0-nightly-20260305-61cbb05-arm64ec.wcp.xz",
+    "sha256": "8fb44099a86894bf03980303d01b4fb4df609d4008b7a3bf5aa5594e09a59ea7"
   },
   "releaseTag": "nightly-20260305-61cbb05"
 }
