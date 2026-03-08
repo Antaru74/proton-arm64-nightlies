@@ -37,7 +37,7 @@ on:
         default: false
         type: boolean
       extra_winebus_patches:
-        description: 'Apply optional GE winebus SDL/hidraw controller patches'
+        description: 'Download and apply optional GE winebus controller patches'
         required: false
         default: false
         type: boolean
@@ -173,16 +173,23 @@ jobs:
             wine-source/android/patches/dlls_winex11_drv_opengl_c.patch
 
 
-          # Optionally add GE winebus controller patches for SDL/hidraw handling.
+
+          # Optionally fetch GE winebus controller patches directly from source.
           if [ "${{ github.event.inputs.extra_winebus_patches || 'false' }}" = "true" ]; then
-            mkdir -p wine-source/android/patches/optional-winebus
-            cp patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/0069-winebus-Ignore-steam-input-virtual-controller-when-P.patch wine-source/android/patches/optional-winebus/
-            cp patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/0071-winebus-PROTON_PREFER_SDL-PROTON_USE_SDL.patch wine-source/android/patches/optional-winebus/
-            cp patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/0082-winebus-Allow-disabling-steam-input-seperately.patch wine-source/android/patches/optional-winebus/
-            cp patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/0087-fixup-winebus-Allow-disabling-steam-input-seperately.patch wine-source/android/patches/optional-winebus/
-            cp patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/0112-winebus-remove-duplicate-code.patch wine-source/android/patches/optional-winebus/
-            cp patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/0141-winebus-Fix-PROTON_ENABLE-DISABLE_HIDRAW.patch wine-source/android/patches/optional-winebus/
-            cp wine-source/android/patches/optional-winebus/*.patch wine-source/android/patches/
+            OPTIONAL_WINEBUS_BASE="https://raw.githubusercontent.com/GloriousEggroll/proton-ge-custom/master/patches/wine-hotfixes/wine-wayland"
+            OPTIONAL_WINEBUS_DIR="wine-source/android/patches/optional-winebus"
+            mkdir -p "$OPTIONAL_WINEBUS_DIR"
+            for patch in \
+              0069-winebus-Ignore-steam-input-virtual-controller-when-P.patch \
+              0071-winebus-PROTON_PREFER_SDL-PROTON_USE_SDL.patch \
+              0082-winebus-Allow-disabling-steam-input-seperately.patch \
+              0087-fixup-winebus-Allow-disabling-steam-input-seperately.patch \
+              0112-winebus-remove-duplicate-code.patch \
+              0141-winebus-Fix-PROTON_ENABLE-DISABLE_HIDRAW.patch; do
+              wget -q "$OPTIONAL_WINEBUS_BASE/$patch" -O "$OPTIONAL_WINEBUS_DIR/$patch"
+              sed -i 's/\r$//' "$OPTIONAL_WINEBUS_DIR/$patch"
+            done
+            cp "$OPTIONAL_WINEBUS_DIR"/*.patch wine-source/android/patches/
             python3 scripts/inject_optional_patches.py \
               wine-source/build-scripts/build-step-arm64ec.sh \
               0069-winebus-Ignore-steam-input-virtual-controller-when-P.patch \
@@ -192,6 +199,7 @@ jobs:
               0112-winebus-remove-duplicate-code.patch \
               0141-winebus-Fix-PROTON_ENABLE-DISABLE_HIDRAW.patch
           fi
+
           # Comment out patches already merged into bleeding-edge (or handled by
           # fix_*.py scripts) so they don't get double-applied or fail the build.
           python3 scripts/filter_patches.py \
@@ -534,6 +542,8 @@ jobs:
           rm -rf "$RUNNER_TEMP"/* || true
           echo "=== Disk usage after cleanup ==="
           df -h
+
+
 
 
 

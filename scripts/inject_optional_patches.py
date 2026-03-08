@@ -16,8 +16,7 @@ def main() -> int:
 
     path = Path(sys.argv[1])
     patches = sys.argv[2:]
-    text = path.read_text(encoding="utf-8")
-    lines = text.splitlines()
+    lines = path.read_text(encoding="utf-8").splitlines()
 
     start = None
     end = None
@@ -39,18 +38,13 @@ def main() -> int:
         if stripped.startswith('"') and stripped.endswith('"'):
             existing.add(stripped.strip('"'))
 
-    additions = []
-    for patch in patches:
-        if patch not in existing:
-            additions.append(f'        "{patch}"')
-
+    additions = [f'        "{patch}"' for patch in patches if patch not in existing]
     if additions:
         lines[end:end] = additions
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         print(f"Injected {len(additions)} optional patch(es) into {path}")
     else:
         print("Optional patches already present, no change")
-
     return 0
 
 
