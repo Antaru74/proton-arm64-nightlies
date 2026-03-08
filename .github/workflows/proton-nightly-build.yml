@@ -41,6 +41,11 @@ on:
         required: false
         default: false
         type: boolean
+      ge_perf_second_pass:
+        description: 'Apply optional GE second-pass performance patch(es)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   prepare:
@@ -207,6 +212,18 @@ jobs:
               0067-winebus-Ignore-steam-input-virtual-controller-when-P.patch \
               0083-fixup-winebus-Allow-disabling-steam-input-seperately.patch \
               0106-winebus-remove-duplicate-code.patch
+          fi
+
+          if [ "${{ inputs.ge_perf_second_pass && 'true' || 'false' }}" = "true" ]; then
+            OPTIONAL_GE_PERF_DIR="wine-source/android/patches/optional-ge-perf"
+            mkdir -p "$OPTIONAL_GE_PERF_DIR"
+            cp patches/ge-gamenative-secondpass/performance/6559c43-ntdll-validate-fd-type-in-ioctl-afd-wine-complete-async.patch \
+              "$OPTIONAL_GE_PERF_DIR/"
+            cp "$OPTIONAL_GE_PERF_DIR"/*.patch wine-source/android/patches/
+            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh \
+              6559c43-ntdll-validate-fd-type-in-ioctl-afd-wine-complete-async.patch
+            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh \
+              6559c43-ntdll-validate-fd-type-in-ioctl-afd-wine-complete-async.patch
           fi
 
           python3 scripts/filter_patches.py wine-source/build-scripts/build-step-arm64ec.sh wine-source
