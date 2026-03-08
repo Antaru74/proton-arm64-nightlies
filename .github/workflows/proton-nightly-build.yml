@@ -180,24 +180,18 @@ jobs:
             OPTIONAL_WINEBUS_DIR="wine-source/android/patches/optional-winebus"
             mkdir -p "$OPTIONAL_WINEBUS_DIR"
             for patch in \
-              0069-winebus-Ignore-steam-input-virtual-controller-when-P.patch \
-              0071-winebus-PROTON_PREFER_SDL-PROTON_USE_SDL.patch \
-              0082-winebus-Allow-disabling-steam-input-seperately.patch \
-              0087-fixup-winebus-Allow-disabling-steam-input-seperately.patch \
-              0112-winebus-remove-duplicate-code.patch \
-              0141-winebus-Fix-PROTON_ENABLE-DISABLE_HIDRAW.patch; do
+              0067-winebus-Ignore-steam-input-virtual-controller-when-P.patch \
+              0083-fixup-winebus-Allow-disabling-steam-input-seperately.patch \
+              0106-winebus-remove-duplicate-code.patch; do
               wget -q "$OPTIONAL_WINEBUS_BASE/$patch" -O "$OPTIONAL_WINEBUS_DIR/$patch"
-              sed -i 's/\r$//' "$OPTIONAL_WINEBUS_DIR/$patch"
+              sed -i 's/$//' "$OPTIONAL_WINEBUS_DIR/$patch"
             done
             cp "$OPTIONAL_WINEBUS_DIR"/*.patch wine-source/android/patches/
             python3 scripts/inject_optional_patches.py \
               wine-source/build-scripts/build-step-arm64ec.sh \
-              0069-winebus-Ignore-steam-input-virtual-controller-when-P.patch \
-              0071-winebus-PROTON_PREFER_SDL-PROTON_USE_SDL.patch \
-              0082-winebus-Allow-disabling-steam-input-seperately.patch \
-              0087-fixup-winebus-Allow-disabling-steam-input-seperately.patch \
-              0112-winebus-remove-duplicate-code.patch \
-              0141-winebus-Fix-PROTON_ENABLE-DISABLE_HIDRAW.patch
+              0067-winebus-Ignore-steam-input-virtual-controller-when-P.patch \
+              0083-fixup-winebus-Allow-disabling-steam-input-seperately.patch \
+              0106-winebus-remove-duplicate-code.patch
           fi
 
           # Comment out patches already merged into bleeding-edge (or handled by
