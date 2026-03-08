@@ -220,6 +220,7 @@ jobs:
             mkdir -p "$OPTIONAL_GE_PERF_DIR"
             cp "ge-second-pass/performance/$OPTIONAL_GE_PERF_PATCH" "$OPTIONAL_GE_PERF_DIR/"
             cp "$OPTIONAL_GE_PERF_DIR"/*.patch wine-source/android/patches/
+            cp "ge-second-pass/mouse/dlls_winex11_drv_mouse_c.patch" "wine-source/android/patches/dlls_winex11_drv_mouse_c.patch"
             python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh               "$OPTIONAL_GE_PERF_PATCH"
             python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh               "$OPTIONAL_GE_PERF_PATCH"
           fi
