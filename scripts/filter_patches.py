@@ -22,6 +22,8 @@ FORCE_SKIP = {
     "test-bylaws/dlls_ntdll_signal_arm64_c.patch",
     "test-bylaws/dlls_ntdll_signal_arm64ec_c.patch",
     "test-bylaws/dlls_ntdll_signal_x86_64_c.patch",
+    "dlls_ntdll_unix_fsync_c.patch",
+    "server_fsync_c.patch",
 }
 
 ALREADY_APPLIED = {
