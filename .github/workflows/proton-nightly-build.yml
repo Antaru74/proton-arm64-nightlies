@@ -232,6 +232,10 @@ jobs:
           # the ntdll.so link step doesn't pull it in, causing undefined symbol.
           python3 scripts/fix_virtual_c.py wine-source
 
+          # Force-disable fsync on Android so Wine doesn't keep probing
+          # futex_waitv on unsupported kernels and spamming runtime warnings.
+          python3 scripts/fix_fsync.py wine-source
+
           # Apply suspend-bypass chain directly when test-bylaws patches drift.
           python3 scripts/fix_suspend_chain.py wine-source
 
