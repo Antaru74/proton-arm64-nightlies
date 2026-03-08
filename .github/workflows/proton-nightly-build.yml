@@ -386,14 +386,28 @@ jobs:
 
       - name: Configure build
         if: steps.upstream_check.outputs.skip_build != 'true'
+        id: configure_build
+        continue-on-error: true
         run: |
           cd wine-source
           bash build-scripts/build-step-arm64ec.sh --configure
-          if [ ! -f Makefile ]; then
-            echo "ERROR: configure did not produce wine-source/Makefile"
-            find . -maxdepth 2 \( -name config.log -o -name configure.log -o -name config.status \) -print || true
-            exit 1
+          test -f Makefile
+
+      - name: Dump configure logs
+        if: steps.upstream_check.outputs.skip_build != 'true' && steps.configure_build.outcome == 'failure'
+        run: |
+          cd wine-source
+          echo "ERROR: configure did not produce wine-source/Makefile"
+          find . -maxdepth 2 \( -name config.log -o -name configure.log -o -name config.status \) -print || true
+          if [ -f ./config.log ]; then
+            echo "=== tail: ./config.log ==="
+            tail -n 250 ./config.log || true
           fi
+          if [ -f ./wine-tools/config.log ]; then
+            echo "=== tail: ./wine-tools/config.log ==="
+            tail -n 120 ./wine-tools/config.log || true
+          fi
+          exit 1
 
       - name: Verify critical patch markers
         if: steps.upstream_check.outputs.skip_build != 'true'
