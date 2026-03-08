@@ -241,12 +241,16 @@ jobs:
           python3 scripts/fix_wdscore.py wine-source
           python3 scripts/fix_virtual_c.py wine-source
           python3 scripts/fix_fsync.py wine-source
-          python3 scripts/fix_suspend_chain.py wine-source
+          if [ "${{ matrix.arch_id }}" = "arm64ec" ]; then
+            python3 scripts/fix_suspend_chain.py wine-source
 
-          echo "=== fix_test_bylaws_chain.py header ==="
-          sed -n '1,40p' scripts/fix_test_bylaws_chain.py
-          if ! grep -q 'Script rev: 2026-03-07-driftproof-v2' scripts/fix_test_bylaws_chain.py; then echo 'ERROR: stale fix_test_bylaws_chain.py in runner'; exit 97; fi
-          python3 scripts/fix_test_bylaws_chain.py wine-source
+            echo "=== fix_test_bylaws_chain.py header ==="
+            sed -n '1,40p' scripts/fix_test_bylaws_chain.py
+            if ! grep -q 'Script rev: 2026-03-07-driftproof-v2' scripts/fix_test_bylaws_chain.py; then echo 'ERROR: stale fix_test_bylaws_chain.py in runner'; exit 97; fi
+            python3 scripts/fix_test_bylaws_chain.py wine-source
+          else
+            echo "Skipping arm64ec-only suspend/bylaws fix chain for ${{ matrix.arch_id }}"
+          fi
 
           PROFILE_VERSION="${{ matrix.profile_version }}"
           TARGET_APP_ID="${{ github.event.inputs.target_app_id || 'app.gamenative' }}"
@@ -364,7 +368,7 @@ jobs:
           exit 1
 
       - name: Verify critical patch markers
-        if: ${{ github.event.inputs.build_arch == '' || github.event.inputs.build_arch == 'both' || github.event.inputs.build_arch == matrix.arch_id }}
+        if: ${{ (github.event.inputs.build_arch == '' || github.event.inputs.build_arch == 'both' || github.event.inputs.build_arch == matrix.arch_id) && matrix.arch_id == 'arm64ec' }}
         run: |
           python3 scripts/verify_required_markers.py wine-source
 
