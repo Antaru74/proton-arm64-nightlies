@@ -148,12 +148,12 @@ jobs:
             sudo apt-get install -y \
               libwayland-dev \
               libwayland-dev:i386 \
-              libwayland-egl1-mesa-dev \
-              libwayland-egl1-mesa-dev:i386 \
               libegl1-mesa-dev \
               libegl1-mesa-dev:i386 \
               libxkbcommon-dev \
               libxkbcommon-dev:i386 \
+              libxkbregistry-dev \
+              libxkbregistry-dev:i386 \
               wayland-protocols
           fi
           if [ "$XINPUT2_ENABLED" = "true" ]; then
