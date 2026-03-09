@@ -185,6 +185,7 @@ def try_apply_patch(wine_src, patch_path):
     patch_name = os.path.basename(patch_path)
     marker_map = {
         "dlls_ntdll_signal_arm64ec_c.patch": ("dlls/ntdll/signal_arm64ec.c", ["ARM64EC_NT_XCONTEXT", "RtlWow64SuspendThread"]),
+        "dlls_ntdll_signal_x86_64_c.patch": ("dlls/ntdll/signal_x86_64.c", ["0x3b0+0xcd0", "RtlWow64SuspendThread"]),
         "include_winternl_h.patch": ("include/winternl.h", ["ProcessFexHardwareTso", "THREAD_CREATE_FLAGS_BYPASS_PROCESS_FREEZE", "RtlWow64SuspendThread", "MemoryFexStatsShm"]),
     }
     if patch_name in marker_map:
@@ -452,5 +453,6 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 
 
