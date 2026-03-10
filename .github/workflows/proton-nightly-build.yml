@@ -205,10 +205,11 @@ jobs:
           rm -rf gamenative-src
 
           if [ "${{ inputs.disable_gamenative_patches && 'true' || 'false' }}" = "true" ]; then
-            python3 -c "from pathlib import Path; paths=('wine-source/build-scripts/build-step-arm64ec.sh','wine-source/build-scripts/build-step-x86_64.sh');
-for rel in paths:
- p=Path(rel); lines=p.read_text(encoding='utf-8').splitlines(); start=next((i for i,l in enumerate(lines) if 'PATCHES=(' in l), None); end=next((i for i,l in enumerate(lines[start+1:], start+1) if l.strip()==')'), None);
- assert start is not None and end is not None, f'PATCHES array not found in {p}'; lines[start+1:end]=[]; p.write_text('\n'.join(lines)+'\n', encoding='utf-8'); print(f'Cleared PATCHES array in {p}')"
+            for f in wine-source/build-scripts/build-step-arm64ec.sh wine-source/build-scripts/build-step-x86_64.sh; do
+              awk 'BEGIN{in_patches=0} /PATCHES=\(/{print; in_patches=1; next} in_patches && /^[[:space:]]*\)/{in_patches=0; print; next} !in_patches{print}' "$f" > "$f.tmp"
+              mv "$f.tmp" "$f"
+              echo "Cleared PATCHES array in $f"
+            done
             echo "=== GameNative patches disabled ==="
             printf '%s\n' \
               'build-step-arm64ec.sh PATCHES array cleared' \
@@ -272,16 +273,6 @@ for rel in paths:
             python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh "$OPTIONAL_ANDROID_DI_KEYBOARD_PATCH"
             echo "=== Android DirectInput keyboard workaround applied ==="
             printf '%s\n' "$OPTIONAL_ANDROID_DI_KEYBOARD_PATCH"
-          fi
-
-
-          if [ "${{ inputs.proton9_input_focus_workaround && 'true' || 'false' }}" = "true" ]; then
-            OPTIONAL_P9_FOCUS_PATCH="dlls_winex11_drv_event_focus_regression_c.patch"
-            cp "ge-second-pass/focus/$OPTIONAL_P9_FOCUS_PATCH" "wine-source/android/patches/$OPTIONAL_P9_FOCUS_PATCH"
-            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh "$OPTIONAL_P9_FOCUS_PATCH"
-            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh "$OPTIONAL_P9_FOCUS_PATCH"
-            echo "=== Proton 9 input focus workaround applied ==="
-            printf '%s\n' "$OPTIONAL_P9_FOCUS_PATCH"
           fi
 
 
