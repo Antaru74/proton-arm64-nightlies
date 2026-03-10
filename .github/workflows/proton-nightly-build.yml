@@ -68,6 +68,18 @@ on:
         default: false
         type: boolean
 
+      goldberg_net_active_workaround:
+        description: 'Ignore _NET_ACTIVE_WINDOW=None transitions on Android for Goldberg/helper-window cases'
+        required: false
+        default: false
+        type: boolean
+
+      goldberg_hwnd_mapping_workaround:
+        description: 'Return 0 instead of desktop for unknown foreign X windows in Goldberg/helper-window cases'
+        required: false
+        default: false
+        type: boolean
+
 
       proton9_event_queue_filter_workaround:
         description: 'Apply Android-only Proton 9 style X11 event queue filter patch'
@@ -311,6 +323,18 @@ jobs:
             python3 scripts/fix_net_active_window.py wine-source
             echo "=== Proton 10 net active window workaround applied ==="
             printf '%s\n' 'scripts/fix_net_active_window.py'
+          fi
+
+          if [ "${{ inputs.goldberg_net_active_workaround && 'true' || 'false' }}" = "true" ]; then
+            python3 scripts/fix_goldberg_net_active.py wine-source
+            echo "=== Goldberg net active window workaround applied ==="
+            printf '%s\n' 'scripts/fix_goldberg_net_active.py'
+          fi
+
+          if [ "${{ inputs.goldberg_hwnd_mapping_workaround && 'true' || 'false' }}" = "true" ]; then
+            python3 scripts/fix_goldberg_hwnd_mapping.py wine-source
+            echo "=== Goldberg hwnd mapping workaround applied ==="
+            printf '%s\n' 'scripts/fix_goldberg_hwnd_mapping.py'
           fi
 
           if [ "${{ inputs.proton9_event_queue_filter_workaround && 'true' || 'false' }}" = "true" ]; then
