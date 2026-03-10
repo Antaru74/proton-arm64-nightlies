@@ -31,6 +31,11 @@ on:
         required: false
         default: 'proton_10.0'
         type: string
+      disable_gamenative_patches:
+        description: 'Disable all GameNative Android patch application and local patch/fix injections'
+        required: false
+        default: false
+        type: boolean
       force_build:
         description: 'Force a build even if upstream HEAD is unchanged'
         required: false
@@ -199,6 +204,35 @@ jobs:
           cp -r gamenative-src/build-scripts wine-source/build-scripts
           rm -rf gamenative-src
 
+          if [ "${{ inputs.disable_gamenative_patches && 'true' || 'false' }}" = "true" ]; then
+            python3 - <<'"'"'PY'"'"'
+from pathlib import Path
+
+for rel in ("wine-source/build-scripts/build-step-arm64ec.sh",
+            "wine-source/build-scripts/build-step-x86_64.sh"):
+    path = Path(rel)
+    lines = path.read_text(encoding="utf-8").splitlines()
+    start = end = None
+    for i, line in enumerate(lines):
+        if "PATCHES=(" in line:
+            start = i
+            continue
+        if start is not None and line.strip() == ")":
+            end = i
+            break
+    if start is None or end is None:
+        raise SystemExit(f"PATCHES array not found in {path}")
+    lines[start + 1:end] = []
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"Cleared PATCHES array in {path}")
+PY
+            echo "=== GameNative patches disabled ==="
+            printf '%s\n' \
+              'build-step-arm64ec.sh PATCHES array cleared' \
+              'build-step-x86_64.sh PATCHES array cleared' \
+              'repo-side patch injection and fix scripts skipped'
+          else
+
           rm -f wine-source/android/patches/dlls_wow64_syscall_c.patch
           rm -f wine-source/android/patches/test-bylaws/dlls_wow64_syscall_c.patch
           rm -f wine-source/android/patches/test-bylaws/dlls_ntdll_signal_arm64ec_c.patch
@@ -298,6 +332,7 @@ jobs:
           printf '%s\n' \
             'dlls_wow64_syscall_c.patch (repo-owned override copied to android/patches and test-bylaws)' \
             'test-bylaws/dlls_ntdll_signal_arm64ec_c.patch (repo-owned override copied to test-bylaws)'
+          fi
 
           PROFILE_VERSION="${{ matrix.profile_version }}"
           TARGET_APP_ID="${{ github.event.inputs.target_app_id || 'app.gamenative' }}"
