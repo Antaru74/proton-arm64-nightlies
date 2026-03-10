@@ -187,6 +187,7 @@ def try_apply_patch(wine_src, patch_path):
         "dlls_ntdll_signal_arm64ec_c.patch": ("dlls/ntdll/signal_arm64ec.c", ["ARM64EC_NT_XCONTEXT", "RtlWow64SuspendThread"]),
         "dlls_ntdll_signal_x86_64_c.patch": ("dlls/ntdll/signal_x86_64.c", ["0x3b0+0xcd0", "RtlWow64SuspendThread"]),
         "include_winternl_h.patch": ("include/winternl.h", ["ProcessFexHardwareTso", "THREAD_CREATE_FLAGS_BYPASS_PROCESS_FREEZE", "RtlWow64SuspendThread", "MemoryFexStatsShm"]),
+        "tools_makedep_c.patch": ("tools/makedep.c", ['arch_install_dirs[arch] = "$(libdir)/wine/aarch64-windows/";', 'output_symlink_rule(']),
     }
     if patch_name in marker_map:
         rel, markers = marker_map[patch_name]
@@ -453,6 +454,3 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-
-
