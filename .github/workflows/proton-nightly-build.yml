@@ -87,6 +87,11 @@ on:
         required: false
         default: false
         type: boolean
+      dinput_android_compat_workaround:
+        description: 'Apply Android-only DirectInput raw-input compatibility workaround patch'
+        required: false
+        default: false
+        type: boolean
       input_poll_debug:
         description: 'Apply optional input polling debug instrumentation patch'
         required: false
@@ -379,6 +384,15 @@ jobs:
             python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh "$OPTIONAL_P9_EVENT_QUEUE_PATCH"
             echo "=== Proton 9 event queue filter workaround applied ==="
             printf '%s\n' "$OPTIONAL_P9_EVENT_QUEUE_PATCH"
+          fi
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dinput_android_compat_workaround && 'true' || 'false' }}" = "true" ]; then
+            OPTIONAL_DINPUT_ANDROID_COMPAT_PATCH="dlls_dinput_android_compat.patch"
+            cp "ge-second-pass/input/$OPTIONAL_DINPUT_ANDROID_COMPAT_PATCH" "wine-source/android/patches/$OPTIONAL_DINPUT_ANDROID_COMPAT_PATCH"
+            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh "$OPTIONAL_DINPUT_ANDROID_COMPAT_PATCH"
+            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh "$OPTIONAL_DINPUT_ANDROID_COMPAT_PATCH"
+            echo "=== Android DirectInput raw-input compatibility workaround applied ==="
+            printf '%s\n' "$OPTIONAL_DINPUT_ANDROID_COMPAT_PATCH"
           fi
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.input_poll_debug && 'true' || 'false' }}" = "true" ]; then
