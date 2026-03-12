@@ -51,6 +51,7 @@ The workflow runs daily at 2 AM UTC and can also be started manually from the [A
 - [WCP_STRUCTURE.md](docs/WCP_STRUCTURE.md)
 - [BUILD_REQUIREMENTS.md](docs/BUILD_REQUIREMENTS.md)
 - [BUILD_ISSUES.md](docs/BUILD_ISSUES.md)
+- [ENVIRONMENT_VARIABLES.md](docs/ENVIRONMENT_VARIABLES.md)
 - [USER_GUIDE.md](docs/USER_GUIDE.md)
 - [DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)
 

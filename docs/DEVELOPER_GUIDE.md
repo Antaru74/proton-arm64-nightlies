@@ -68,6 +68,12 @@ The workflow no longer contains any donor or kernel compatibility overlay step. 
 
 `clang` is the correct compiler family here. This is an Android/bionic build, not desktop Proton.
 
+## Environment Variables
+
+The runtime environment variable reference lives in [ENVIRONMENT_VARIABLES.md](ENVIRONMENT_VARIABLES.md).
+
+The current repo-specific entries are centered on Android input toggles, optional debug toggles, and bundled Wine or Proton runtime variables rather than build-script configuration.
+
 ## Local Build Notes
 
 If you build locally, mirror the workflow assumptions:
