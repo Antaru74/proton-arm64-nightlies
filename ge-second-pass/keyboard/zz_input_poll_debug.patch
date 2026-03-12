@@ -1,6 +1,6 @@
-diff --git a/wine/dlls/winex11.drv/keyboard.c b/wine/dlls/winex11.drv/keyboard.c
---- a/wine/dlls/winex11.drv/keyboard.c
-+++ b/wine/dlls/winex11.drv/keyboard.c
+diff --git a/dlls/winex11.drv/keyboard.c b/dlls/winex11.drv/keyboard.c
+--- a/dlls/winex11.drv/keyboard.c
++++ b/dlls/winex11.drv/keyboard.c
 @@ -38,6 +38,8 @@
  
  #include <ctype.h>
@@ -63,9 +63,9 @@ diff --git a/wine/dlls/winex11.drv/keyboard.c b/wine/dlls/winex11.drv/keyboard.c
  
      update_lock_state( hwnd, vkey, event->state, event_time );
  
-diff --git a/wine/dlls/win32u/input.c b/wine/dlls/win32u/input.c
---- a/wine/dlls/win32u/input.c
-+++ b/wine/dlls/win32u/input.c
+diff --git a/dlls/win32u/input.c b/dlls/win32u/input.c
+--- a/dlls/win32u/input.c
++++ b/dlls/win32u/input.c
 @@ -40,6 +40,14 @@
  
  WINE_DEFAULT_DEBUG_CHANNEL(win);
@@ -95,9 +95,9 @@ diff --git a/wine/dlls/win32u/input.c b/wine/dlls/win32u/input.c
      return !status;
  }
  
-diff --git a/wine/server/queue.c b/wine/server/queue.c
---- a/wine/server/queue.c
-+++ b/wine/server/queue.c
+diff --git a/server/queue.c b/server/queue.c
+--- a/server/queue.c
++++ b/server/queue.c
 @@ -55,6 +55,14 @@
  
  /* list of processes registered for rawinput in the input desktop */
@@ -113,9 +113,9 @@ diff --git a/wine/server/queue.c b/wine/server/queue.c
  
  struct message_result
  {
-diff --git a/wine/dlls/dinput/keyboard.c b/wine/dlls/dinput/keyboard.c
---- a/wine/dlls/dinput/keyboard.c
-+++ b/wine/dlls/dinput/keyboard.c
+diff --git a/dlls/dinput/keyboard.c b/dlls/dinput/keyboard.c
+--- a/dlls/dinput/keyboard.c
++++ b/dlls/dinput/keyboard.c
 @@ -21,6 +21,8 @@
   */
  
@@ -151,9 +151,9 @@ diff --git a/wine/dlls/dinput/keyboard.c b/wine/dlls/dinput/keyboard.c
  
      EnterCriticalSection( &impl->base.crit );
  
-diff --git a/wine/dlls/dinput/device.c b/wine/dlls/dinput/device.c
---- a/wine/dlls/dinput/device.c
-+++ b/wine/dlls/dinput/device.c
+diff --git a/dlls/dinput/device.c b/dlls/dinput/device.c
+--- a/dlls/dinput/device.c
++++ b/dlls/dinput/device.c
 @@ -20,6 +20,8 @@
   */
  
