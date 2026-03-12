@@ -57,36 +57,6 @@ on:
         default: false
         type: boolean
 
-      proton10_net_active_window_workaround:
-        description: 'Apply Android-only Proton 10 style _NET_ACTIVE_WINDOW focus tracking workaround'
-        required: false
-        default: false
-        type: boolean
-
-      goldberg_net_active_workaround:
-        description: 'Ignore _NET_ACTIVE_WINDOW=None transitions on Android for Goldberg/helper-window cases'
-        required: false
-        default: false
-        type: boolean
-
-      goldberg_hwnd_mapping_workaround:
-        description: 'Return 0 instead of desktop for unknown foreign X windows in Goldberg/helper-window cases'
-        required: false
-        default: false
-        type: boolean
-
-      goldberg_event_compat_workaround:
-        description: 'Apply broader Android-only Proton 10 style event compatibility handling for Goldberg/helper-window cases'
-        required: false
-        default: false
-        type: boolean
-
-
-      proton9_event_queue_filter_workaround:
-        description: 'Apply Android-only Proton 9 style X11 event queue filter patch'
-        required: false
-        default: false
-        type: boolean
       dinput_android_compat_workaround:
         description: 'Apply Android-only DirectInput raw-input compatibility workaround patch'
         required: false
