@@ -229,6 +229,8 @@ jobs:
           done
           echo "NTSYNC_DIR=$NTSYNC_DIR" >> "$GITHUB_ENV"
 
+      - name: Prepare patch set and build scripts
+        run: |
           if [ "${{ inputs.disable_gamenative_patches && 'true' || 'false' }}" = "true" ]; then
             for f in wine-source/build-scripts/build-step-arm64ec.sh wine-source/build-scripts/build-step-x86_64.sh; do
               awk 'BEGIN{in_patches=0} /PATCHES=\(/{print; in_patches=1; next} in_patches && /^[[:space:]]*\)/{in_patches=0; print; next} !in_patches{print; next} /"dlls_winepulse_drv_pulse_c.patch"/{print; next} /"dlls_ntdll_unix_esync_c.patch"/{print; next} /"server_esync_c.patch"/{print; next} /"dlls_winex11_drv_bitblt_c.patch"/{print; next} /"dlls_winex11_drv_mouse_c.patch"/{print; next}' "$f" > "$f.tmp"
@@ -432,8 +434,14 @@ jobs:
               replacement_value = f'"{value}"' if quote else value
               new_text, count = pattern.subn(rf'\g<prefix>{replacement_value}', text, count=1)
               if count == 0:
-                  raise SystemExit(f"ERROR: could not find assignment for {name} in {path}")
-              text = new_text
+                  line = f'export {name}={replacement_value}'
+                  if not text.endswith("\n"):
+                      text += "\n"
+                  text += f"\n# Added by proton-arm64-nightlies workflow\n{line}\n"
+                  print(f"Appended override for {name} in {path}")
+              else:
+                  text = new_text
+                  print(f"Replaced assignment for {name} in {path}")
 
           path.write_text(text, encoding="utf-8")
           print(f"Patched {path}")
@@ -892,8 +900,6 @@ jobs:
           rm -rf "$RUNNER_TEMP"/* || true
           echo "=== Disk usage after cleanup ==="
           df -h
-
-
 
 
 
