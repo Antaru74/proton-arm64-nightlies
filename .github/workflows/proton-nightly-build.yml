@@ -412,8 +412,32 @@ jobs:
           echo "Using profile_version=$PROFILE_VERSION"
           echo "Using install_dir=$INSTALL_DIR"
           echo "Using RUNTIME_PATH=$RUNTIME_PATH"
-          sed -i "s|export install_dir=.*|export install_dir=${INSTALL_DIR}|" "wine-source/build-scripts/${{ matrix.build_script }}"
-          sed -i "s|export RUNTIME_PATH=.*|export RUNTIME_PATH=\"${RUNTIME_PATH}\"|" "wine-source/build-scripts/${{ matrix.build_script }}"
+          BUILD_SCRIPT_PATH="wine-source/build-scripts/${{ matrix.build_script }}"
+          INSTALL_DIR="$INSTALL_DIR" RUNTIME_PATH="$RUNTIME_PATH" BUILD_SCRIPT_PATH="$BUILD_SCRIPT_PATH" python3 <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          path = Path(os.environ["BUILD_SCRIPT_PATH"])
+          text = path.read_text(encoding="utf-8")
+
+          replacements = [
+              ("install_dir", os.environ["INSTALL_DIR"], False),
+              ("RUNTIME_PATH", os.environ["RUNTIME_PATH"], True),
+          ]
+
+          for name, value, quote in replacements:
+              pattern = re.compile(rf'^(?P<prefix>\s*(?:export\s+)?{re.escape(name)}=).*$',
+                                   re.MULTILINE)
+              replacement_value = f'"{value}"' if quote else value
+              new_text, count = pattern.subn(rf'\g<prefix>{replacement_value}', text, count=1)
+              if count == 0:
+                  raise SystemExit(f"ERROR: could not find assignment for {name} in {path}")
+              text = new_text
+
+          path.write_text(text, encoding="utf-8")
+          print(f"Patched {path}")
+          PY
 
       - name: Download and extract termuxfs for ${{ matrix.termux_arch }}
         run: |
@@ -868,7 +892,6 @@ jobs:
           rm -rf "$RUNNER_TEMP"/* || true
           echo "=== Disk usage after cleanup ==="
           df -h
-
 
 
 
