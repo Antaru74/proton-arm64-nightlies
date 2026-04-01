@@ -211,6 +211,30 @@ def ensure_signal_and_wait(text: str) -> tuple[str, bool]:
     return replace_function_body(text, signature, body), ok
 
 
+def ensure_wait_for_multiple_objects(text: str) -> tuple[str, bool]:
+    signature = "NTSTATUS WINAPI NtWaitForMultipleObjects( DWORD count, const HANDLE *handles, BOOLEAN wait_any,"
+    info = get_function_body(text, signature)
+    if info is None:
+        print("  [hook NtWaitForMultipleObjects ret] function not found")
+        return text, False
+
+    _, _, _, body = info
+
+    if "\n    NTSTATUS ret;\n" in body:
+        print("  [hook NtWaitForMultipleObjects ret] already applied")
+        return text, True
+
+    anchor = "\n    if (!count || count > MAXIMUM_WAIT_OBJECTS) return STATUS_INVALID_PARAMETER_1;\n"
+    pos = body.find(anchor)
+    if pos < 0:
+        print("  [hook NtWaitForMultipleObjects ret] anchor not found")
+        return text, False
+
+    print("  [hook NtWaitForMultipleObjects ret] applied")
+    body = body[:pos] + "\n    NTSTATUS ret;" + body[pos:]
+    return replace_function_body(text, signature, body), True
+
+
 def main() -> int:
     if len(sys.argv) < 2:
         print("Usage: fix_ntsync_chain.py <wine-source-dir>")
@@ -316,6 +340,9 @@ def main() -> int:
         ),
     ]
 
+    src, rc = ensure_wait_for_multiple_objects(src)
+    ok = ok and rc
+
     for signature, desc, marker, snippet in function_ops:
         src, rc = ensure_in_function_before_anchor(
             src,
@@ -332,6 +359,7 @@ def main() -> int:
 
     required_markers = [
         "static NTSTATUS inproc_release_semaphore( HANDLE handle, ULONG count, ULONG *prev_count )",
+        "NTSTATUS ret;\n    if (!count || count > MAXIMUM_WAIT_OBJECTS) return STATUS_INVALID_PARAMETER_1;",
         "inproc_query_semaphore( handle, out )",
         "inproc_release_semaphore( handle, count, previous )",
         "inproc_set_event( handle, prev_state )",
