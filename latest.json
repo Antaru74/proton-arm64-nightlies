@@ -1,28 +1,28 @@
 {
-  "versionName": "proton-bleeding-edge-20260403-72e89e5-arm64ec",
+  "versionName": "proton-bleeding-edge-20260403-2001ded-arm64ec",
   "date": "20260403",
-  "gitHash": "72e89e5",
+  "gitHash": "2001ded",
   "wcp": {
-    "fileName": "proton-proton-bleeding-edge-20260403-72e89e5-arm64ec.wcp",
-    "sha256": "c4f33bb11d34d5e29874b379963d0aea9c7c0bee52711264a739a148230d536c"
+    "fileName": "proton-proton-bleeding-edge-20260403-2001ded-arm64ec.wcp",
+    "sha256": "3212e0a91ab99ae34eafca9919cd008dc4984079394399305cb9816b97f6a5a2"
   },
   "wcpxz": {
-    "fileName": "proton-wine-proton-bleeding-edge-20260403-72e89e5-arm64ec.wcp.xz",
-    "sha256": "9c8497c51dbb9cf91e7a0b61399f0a6a1c6d971ee65690f200dc989aa1a65fcf"
+    "fileName": "proton-wine-proton-bleeding-edge-20260403-2001ded-arm64ec.wcp.xz",
+    "sha256": "281ae55247f401f3d07ee65aea7b667a3d460f598939f2e454f9b0de44df03c2"
   },
   "artifacts": {
     "arm64ec": {
-      "versionName": "proton-bleeding-edge-20260403-72e89e5-arm64ec",
+      "versionName": "proton-bleeding-edge-20260403-2001ded-arm64ec",
       "profileVersion": "10.0.99-arm64ec",
       "wcp": {
-        "fileName": "proton-proton-bleeding-edge-20260403-72e89e5-arm64ec.wcp",
-        "sha256": "c4f33bb11d34d5e29874b379963d0aea9c7c0bee52711264a739a148230d536c"
+        "fileName": "proton-proton-bleeding-edge-20260403-2001ded-arm64ec.wcp",
+        "sha256": "3212e0a91ab99ae34eafca9919cd008dc4984079394399305cb9816b97f6a5a2"
       },
       "wcpxz": {
-        "fileName": "proton-wine-proton-bleeding-edge-20260403-72e89e5-arm64ec.wcp.xz",
-        "sha256": "9c8497c51dbb9cf91e7a0b61399f0a6a1c6d971ee65690f200dc989aa1a65fcf"
+        "fileName": "proton-wine-proton-bleeding-edge-20260403-2001ded-arm64ec.wcp.xz",
+        "sha256": "281ae55247f401f3d07ee65aea7b667a3d460f598939f2e454f9b0de44df03c2"
       }
     }
   },
-  "releaseTag": "bleeding-edge-20260403-72e89e5-run374"
+  "releaseTag": "bleeding-edge-20260403-2001ded-run378"
 }
