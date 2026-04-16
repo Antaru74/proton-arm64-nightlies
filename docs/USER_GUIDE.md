@@ -2,7 +2,7 @@
 
 ## What These Builds Are
 
-These are automated Proton ARM64 builds for Android, intended primarily for GameNative. They are built from Valve's `bleeding-edge` Wine branch and patched with GameNative's Android and ARM64EC changes.
+These are automated Proton ARM64 builds for Android, intended primarily for GameNative. They are built from Valve's `proton_11.0` Proton branch using its `wine/` submodule, then patched with GameNative's Android and ARM64EC changes.
 
 There are two package variants:
 
@@ -19,7 +19,7 @@ There are two package variants:
 ## Downloading
 
 1. Open the repository's **Releases** page
-2. Find the latest release tagged `bleeding-edge-YYYYMMDD-HASH`
+2. Find the latest release tagged `proton_11-YYYYMMDD-HASH`
 3. Download:
    - `proton-*.wcp` for GameNative
    - `proton-wine-*.wcp.xz` for Ludashi/CMOD
@@ -29,10 +29,10 @@ There are two package variants:
 
 ```bash
 # Linux/macOS
-sha256sum -c proton-proton-bleeding-edge-20260305-abc1234-arm64ec.wcp.sha256
+sha256sum -c proton-proton_11-20260305-abc1234-arm64ec.wcp.sha256
 
 # Windows PowerShell
-Get-FileHash proton-proton-bleeding-edge-20260305-abc1234-arm64ec.wcp -Algorithm SHA256
+Get-FileHash proton-proton_11-20260305-abc1234-arm64ec.wcp -Algorithm SHA256
 ```
 
 ## Installing in GameNative
@@ -46,7 +46,7 @@ Get-FileHash proton-proton-bleeding-edge-20260305-abc1234-arm64ec.wcp -Algorithm
 
 ## Important Compatibility Note
 
-The visible release naming uses `bleeding-edge`, but the internal profile version is numeric: `10.0.99-arm64ec`.
+The visible release naming uses `proton_11`, but the internal profile version is numeric: `10.0.99-arm64ec`.
 
 That is intentional. Stock GameNative's existing parser only recognizes ARM64EC Proton if the internal version stays numeric.
 

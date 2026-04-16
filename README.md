@@ -1,6 +1,6 @@
-# Proton ARM64 Bleeding-Edge Builds for Winlator
+# Proton ARM64 Proton_11 Builds for Winlator
 
-Automated Proton ARM64 builds for Android, based on Valve's `bleeding-edge` Wine branch with GameNative's Android and ARM64EC patch stack layered on top.
+Automated Proton ARM64 builds for Android, based on Valve's `proton_11.0` Proton branch with the Proton `wine/` submodule as the base source tree, then layered with GameNative's Android and ARM64EC patch stack.
 
 This repo currently produces two artifacts per build:
 
@@ -11,9 +11,9 @@ This repo currently produces two artifacts per build:
 
 ## Current Build Behavior
 
-- Source Wine ref: `bleeding-edge`
+- Source Proton ref: `proton_11.0`
 - GameNative patch ref: `proton_10.0`
-- External naming: `proton-bleeding-edge-YYYYMMDD-HASH-arm64ec`
+- External naming: `proton-proton_11-YYYYMMDD-HASH-arm64ec`
 - Internal GameNative profile version: `10.0.99-arm64ec`
 - No donor or kernel compatibility overlay
 
@@ -45,7 +45,7 @@ Each build includes:
 
 ## Source Layout
 
-- Base Wine source: [ValveSoftware/wine](https://github.com/ValveSoftware/wine) at `bleeding-edge`
+- Base source: [ValveSoftware/Proton](https://github.com/ValveSoftware/Proton/tree/proton_11.0) at `proton_11.0`, using its `wine/` submodule as `wine-source`
 - Android and ARM64EC patches/build scripts: [GameNative/proton-wine](https://github.com/GameNative/proton-wine) at `proton_10.0`
 
 ## Build Status
@@ -63,4 +63,4 @@ The workflow runs daily at 2 AM UTC and can also be started manually from the [A
 
 ## License
 
-This repository is licensed under the GPL General Public License v3.0. See [LICENSE](LICENSE).
+This repository is licensed under the GNU General Public License v3.0. See [LICENSE](LICENSE).

@@ -1,17 +1,18 @@
-# Developer Guide: Proton ARM64 Bleeding-Edge Build System
+# Developer Guide: Proton ARM64 Proton_11 Build System
 
 ## Overview
 
-The workflow builds Android-targeted Wine from Valve `bleeding-edge`, then layers in GameNative's Android and ARM64EC build system and local drift-fix scripts.
+The workflow builds Android-targeted Wine from Valve Proton `proton_11.0` by checking out Proton and using its `wine/` submodule as the working source tree, then layers in GameNative's Android and ARM64EC build system and local drift-fix scripts.
 
 Current high-level flow:
 
-1. Clone `ValveSoftware/wine` at `bleeding-edge`
-2. Clone `GameNative/proton-wine` at `proton_10.0`
-3. Copy GameNative `android/` and `build-scripts/` into the Valve tree
-4. Apply local fix scripts for patch drift and ARM64EC-specific build issues
-5. Build and install with Android NDK r27d and llvm-mingw
-6. Package:
+1. Clone `ValveSoftware/Proton` at `proton_11.0`
+2. Initialize Proton's `wine/` submodule and use it as `wine-source`
+3. Clone `GameNative/proton-wine` at `proton_10.0`
+4. Copy GameNative `android/` and `build-scripts/` into the Wine tree
+5. Apply local fix scripts for patch drift and ARM64EC-specific build issues
+6. Build and install with Android NDK r27d and llvm-mingw
+7. Package:
    - `proton-*.wcp` with Zstandard
    - `proton-wine-*.wcp.xz` with XZ
 
@@ -24,12 +25,12 @@ The optional GE compatibility bundle currently carries three low-risk first-pass
 
 ### Source refs
 
-- `wine_ref=bleeding-edge`
+- `wine_ref=proton_11.0`
 - `gamenative_ref=proton_10.0`
 
 ### External vs internal naming
 
-External release naming stays on `bleeding-edge`, but the GameNative-facing internal profile version is currently:
+External release naming now follows `proton_11.0`, but the GameNative-facing internal profile version is currently:
 
 ```text
 10.0.99-arm64ec
@@ -55,13 +56,13 @@ The workflow no longer contains any donor or kernel compatibility overlay step. 
 
 ### GameNative package
 
-- Filename pattern: `proton-proton-bleeding-edge-YYYYMMDD-HASH-arm64ec.wcp`
+- Filename pattern: `proton-proton_11-YYYYMMDD-HASH-arm64ec.wcp`
 - Compression: Zstandard
 - Profile type: `Proton`
 
 ### Compatibility package
 
-- Filename pattern: `proton-wine-proton-bleeding-edge-YYYYMMDD-HASH-arm64ec.wcp.xz`
+- Filename pattern: `proton-wine-proton-proton_11-YYYYMMDD-HASH-arm64ec.wcp.xz`
 - Compression: XZ
 - Intended for Ludashi/CMOD-style consumers
 
@@ -83,7 +84,7 @@ The current repo-specific entries are centered on Android input toggles, optiona
 
 If you build locally, mirror the workflow assumptions:
 
-- use Valve `bleeding-edge`
+- use Valve Proton `proton_11.0` and initialize the `wine/` submodule
 - use GameNative `proton_10.0`
 - keep the internal profile version and baked install path aligned
 

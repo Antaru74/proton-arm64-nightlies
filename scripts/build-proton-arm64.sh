@@ -173,8 +173,8 @@ if git -C "$SOURCE_DIR" rev-parse HEAD &>/dev/null; then
     GIT_HASH="$(git -C "$SOURCE_DIR" rev-parse --short HEAD)"
     GIT_DATE="$(git -C "$SOURCE_DIR" log -1 --format='%cd' --date=format:'%Y%m%d')"
 fi
-ARTIFACT_VERSION="proton-bleeding-edge-${GIT_DATE}-${GIT_HASH}-arm64ec"
-DISPLAY_NAME="Proton bleeding-edge ARM64EC ${GIT_DATE} (${GIT_HASH})"
+ARTIFACT_VERSION="proton-proton_11-${GIT_DATE}-${GIT_HASH}-arm64ec"
+DISPLAY_NAME="Proton_11 ARM64EC ${GIT_DATE} (${GIT_HASH})"
 log "Artifact version: $ARTIFACT_VERSION"
 log "Profile version:  $PROFILE_VERSION"
 

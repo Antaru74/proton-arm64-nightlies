@@ -38,7 +38,7 @@ Example current Proton metadata:
   "type": "Proton",
   "versionName": "10.0.99-arm64ec",
   "versionCode": 1,
-  "description": "Proton bleeding-edge ARM64 20260307 (abcdef0)",
+  "description": "Proton_11 ARM64 20260307 (abcdef0)",
   "files": [],
   "wine": {
     "binPath": "bin",
@@ -50,7 +50,7 @@ Example current Proton metadata:
 
 ## Why `versionName` Is Numeric
 
-Even though the external release naming is `bleeding-edge`, the internal `versionName` is numeric so stock GameNative recognizes the package as ARM64EC Proton.
+Even though the external release naming is `proton_11`, the internal `versionName` is numeric so stock GameNative recognizes the package as ARM64EC Proton.
 
 That internal value currently drives installation to:
 

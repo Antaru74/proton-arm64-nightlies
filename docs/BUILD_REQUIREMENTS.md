@@ -1,4 +1,4 @@
-# Build Requirements for Proton ARM64 Bleeding-Edge Builds
+# Build Requirements for Proton ARM64 Proton 11 Builds
 
 ## Build Target
 
@@ -13,7 +13,7 @@ Current assumptions:
 
 ## Source Requirements
 
-- `ValveSoftware/wine` at `bleeding-edge`
+- `ValveSoftware/Proton` at `proton_11.0`, with its `wine/` submodule initialized
 - `GameNative/proton-wine` at `proton_10.0`
 
 ## Host Requirements
@@ -44,7 +44,7 @@ Do not use Valve's desktop Proton SDK assumptions here. This is an Android/bioni
 
 ### Patch stack required
 
-Valve `bleeding-edge` alone is not enough. The build depends on the GameNative Android and ARM64EC patch stack plus the local fix scripts in this repo.
+The Proton `wine/` submodule alone is not enough. The build depends on the GameNative Android and ARM64EC patch stack plus the local fix scripts in this repo.
 
 ### Profile naming matters
 

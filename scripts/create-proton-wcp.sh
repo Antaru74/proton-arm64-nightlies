@@ -73,7 +73,7 @@ if [[ -z "$VERSION_CODE" ]]; then
 fi
 
 if [[ -z "$DESCRIPTION" ]]; then
-    DESCRIPTION="Proton bleeding-edge ARM64EC ${DATE_TAG} (${GIT_HASH})"
+    DESCRIPTION="Proton_11 ARM64EC ${DATE_TAG} (${GIT_HASH})"
 fi
 
 echo "  Version name: $VERSION_NAME"

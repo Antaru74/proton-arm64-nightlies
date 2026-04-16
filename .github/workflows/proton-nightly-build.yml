@@ -1,4 +1,4 @@
-name: Proton Bleeding-Edge Build
+name: Proton_11 Build
 
 on:
   schedule:
@@ -22,9 +22,9 @@ on:
           - app.gamenative
           - com.winlator.cmod
       wine_ref:
-        description: 'Valve wine ref (branch/tag/commit)'
+        description: 'Valve Proton ref (branch/tag/commit)'
         required: false
-        default: 'bleeding-edge'
+        default: 'proton_11.0'
         type: string
       gamenative_ref:
         description: 'GameNative proton-wine ref (branch/tag/commit)'
@@ -88,23 +88,19 @@ jobs:
       - name: Checkout this repo
         uses: actions/checkout@v4
 
-      - name: Check upstream bleeding-edge head
+      - name: Check upstream Proton ref
         id: upstream_check
         run: |
-          WINE_REF="${{ github.event.inputs.wine_ref || 'bleeding-edge' }}"
+          PROTON_REF="${{ github.event.inputs.wine_ref || 'proton_11.0' }}"
           FORCE_BUILD="${{ inputs.force_build && 'true' || 'false' }}"
           PREV_GIT_HASH="$(python3 -c 'import json; d=json.load(open("latest.json")); print(d.get("gitHash",""))')"
-
-          if printf '%s' "$WINE_REF" | grep -Eq '^[0-9a-fA-F]{7,40}$'; then
-            REMOTE_FULL_HASH="$WINE_REF"
-          else
-            REMOTE_FULL_HASH="$(git ls-remote https://github.com/ValveSoftware/wine "$WINE_REF" "refs/heads/$WINE_REF" "refs/tags/$WINE_REF" | awk 'NR==1 {print $1}')"
-          fi
-
-          if [ -z "$REMOTE_FULL_HASH" ]; then
-            echo "ERROR: could not resolve upstream ref $WINE_REF"
-            exit 1
-          fi
+          rm -rf proton-source
+          git clone --depth=1 https://github.com/ValveSoftware/Proton proton-source
+          git -C proton-source fetch --depth=1 origin "$PROTON_REF"
+          git -C proton-source checkout FETCH_HEAD
+          git -C proton-source submodule update --init --recursive --depth=1 wine
+          REMOTE_FULL_HASH="$(git -C proton-source/wine rev-parse HEAD)"
+          rm -rf proton-source
 
           REMOTE_SHORT_HASH="$(printf '%s' "$REMOTE_FULL_HASH" | cut -c1-7)"
           SKIP_BUILD=false
@@ -116,14 +112,14 @@ jobs:
           echo "resolved_short_hash=$REMOTE_SHORT_HASH" >> "$GITHUB_OUTPUT"
           echo "skip_build=$SKIP_BUILD" >> "$GITHUB_OUTPUT"
           echo "Previous gitHash: $PREV_GIT_HASH"
-          echo "Remote   gitHash: $REMOTE_SHORT_HASH"
+          echo "Remote wine submodule gitHash: $REMOTE_SHORT_HASH"
           echo "force_build=$FORCE_BUILD"
           echo "skip_build=$SKIP_BUILD"
 
       - name: Stop early when upstream is unchanged
         if: steps.upstream_check.outputs.skip_build == 'true'
         run: |
-          echo "Skipping build: upstream bleeding-edge HEAD matches latest.json"
+          echo "Skipping build: upstream Proton ref matches latest.json"
 
   build:
     needs: prepare
@@ -188,18 +184,24 @@ jobs:
             python3-zstandard \
             patch
 
-      - name: Clone Wine source
+      - name: Clone Proton source
         run: |
-          rm -rf wine-source
-          WINE_REF="${{ github.event.inputs.wine_ref || 'bleeding-edge' }}"
-          git clone --depth=1 --branch "$WINE_REF" \
-            https://github.com/ValveSoftware/wine wine-source \
+          rm -rf proton-source wine-source
+          WINE_REF="${{ github.event.inputs.wine_ref || 'proton_11.0' }}"
+          git clone --depth=1 --recurse-submodules --shallow-submodules --branch "$WINE_REF" \
+            https://github.com/ValveSoftware/Proton proton-source \
           || {
-            git clone --depth=1 https://github.com/ValveSoftware/wine wine-source
-            git -C wine-source fetch --depth=1 origin "$WINE_REF"
-            git -C wine-source checkout FETCH_HEAD
+            git clone --depth=1 https://github.com/ValveSoftware/Proton proton-source
+            git -C proton-source fetch --depth=1 origin "$WINE_REF"
+            git -C proton-source checkout FETCH_HEAD
+            git -C proton-source submodule update --init --recursive --depth=1 wine
           }
-          echo "Wine ref: $WINE_REF"
+          if [ ! -d proton-source/wine ]; then
+            git -C proton-source submodule update --init --recursive --depth=1 wine
+          fi
+          mv proton-source/wine wine-source
+          rm -rf proton-source
+          echo "Proton ref: $WINE_REF"
           git -C wine-source rev-parse HEAD
 
       - name: Clone GameNative patches and build scripts
@@ -692,9 +694,9 @@ jobs:
           OUTPUT_DIR="$HOME/${{ matrix.output_dir }}"
           GIT_HASH=$(git -C wine-source rev-parse --short HEAD)
           GIT_DATE=$(git -C wine-source log -1 --format='%cd' --date=format:'%Y%m%d')
-          VERSION="proton-bleeding-edge-${GIT_DATE}-${GIT_HASH}-${{ matrix.arch_id }}"
+          VERSION="proton-proton_11-${GIT_DATE}-${GIT_HASH}-${{ matrix.arch_id }}"
           PROFILE_VERSION="${{ matrix.profile_version }}"
-          DISPLAY_NAME="Proton bleeding-edge ${{ matrix.display_arch }} ${GIT_DATE} (${GIT_HASH})"
+          DISPLAY_NAME="Proton_11 ${{ matrix.display_arch }} ${GIT_DATE} (${GIT_HASH})"
           DEFAULT_DESCRIPTION="$DISPLAY_NAME"
           MANUAL_DESCRIPTION="${{ github.event.inputs.release_description || '' }}"
           if [ -n "$MANUAL_DESCRIPTION" ]; then
@@ -769,7 +771,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: proton-bleeding-edge-${{ matrix.arch_id }}
+          name: proton-proton_11-${{ matrix.arch_id }}
           path: output/
           retention-days: 30
 
@@ -820,7 +822,7 @@ jobs:
           arm = metas["arm64ec"]
           latest = json.loads(Path("latest.json").read_text())
           run_suffix = os.environ['GITHUB_RUN_NUMBER']
-          release_tag = f"bleeding-edge-{arm['gitDate']}-{arm['gitHash']}-run{run_suffix}"
+          release_tag = f"proton_11-{arm['gitDate']}-{arm['gitHash']}-run{run_suffix}"
 
           artifacts = latest.get("artifacts", {})
           prev_arm = artifacts.get("arm64ec", {})
@@ -870,8 +872,8 @@ jobs:
           GIT_HASH="${{ steps.detect_changes.outputs.git_hash }}"
           GIT_DATE="${{ steps.detect_changes.outputs.git_date }}"
           TAG="${{ steps.detect_changes.outputs.release_tag }}"
-          TITLE="Proton bleeding-edge ARM64EC (${GIT_DATE})"
-          DEFAULT_NOTES="Built from ValveSoftware/wine bleeding-edge @ ${GIT_HASH} with GameNative Android build scripts. Includes ARM64EC packages in the same release. Automated bleeding-edge build; use at your own risk."
+          TITLE="Proton_11 ARM64EC (${GIT_DATE})"
+          DEFAULT_NOTES="Built from ValveSoftware/Proton proton_11.0 (wine submodule) @ ${GIT_HASH} with GameNative Android build scripts. Includes ARM64EC packages in the same release. Automated Proton_11 build; use at your own risk."
           MANUAL_DESCRIPTION="${{ github.event.inputs.release_description || '' }}"
           if [ -n "$MANUAL_DESCRIPTION" ]; then
             NOTES="$DEFAULT_NOTES"$'\n\n'"Additional description: $MANUAL_DESCRIPTION"
@@ -939,7 +941,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add latest.json
           GIT_DATE="${{ steps.detect_changes.outputs.git_date }}"
-          git diff --staged --quiet || git commit -m "chore: update latest.json for bleeding-edge ${GIT_DATE}"
+          git diff --staged --quiet || git commit -m "chore: update latest.json for proton_11.0 ${GIT_DATE}"
           git pull --rebase origin HEAD
           git push
 
