@@ -7,6 +7,7 @@ Usage: fix_test_bylaws_chain.py <wine-source-dir>
 Script rev: 2026-03-07-driftproof-v2
 """
 import os
+import re
 import subprocess
 import sys
 
@@ -360,6 +361,39 @@ def fallback_fix_wow64_syscall(wine_src):
     return notes
 
 
+def fallback_fix_loader(wine_src):
+    rel = "dlls/ntdll/loader.c"
+    path = os.path.join(wine_src, rel)
+    if not os.path.exists(path):
+        return [f"MISSING: {rel}"]
+
+    txt = read_text(path)
+    notes = []
+
+    if "pWow64SuspendLocalThread" not in txt:
+        anchors = [
+            "GET_PTR( Wow64GetThreadContext );\n",
+            "GET_PTR( Wow64SetThreadContext );\n",
+            "GET_PTR( Wow64ApcRoutine );\n",
+        ]
+        inserted = False
+        for anchor in anchors:
+            if anchor in txt:
+                txt = txt.replace(
+                    anchor,
+                    anchor + "    GET_PTR( Wow64SuspendLocalThread );\n",
+                    1,
+                )
+                inserted = True
+                notes.append(f"FIXED: {rel} add GET_PTR( Wow64SuspendLocalThread )")
+                break
+        if not inserted:
+            notes.append(f"WARN: {rel} could not place GET_PTR( Wow64SuspendLocalThread )")
+
+    write_text(path, txt)
+    return notes
+
+
 def fallback_fix_makedep(wine_src):
     rel = "tools/makedep.c"
     path = os.path.join(wine_src, rel)
@@ -370,23 +404,15 @@ def fallback_fix_makedep(wine_src):
     notes = []
 
     if "aarch64-windows" not in txt:
-        anchors = [
-            'arch_install_dirs[arch] = "$(libdir)/wine/arm64ec-windows/";\n',
-            'arch_install_dirs[arch] = "$(libdir)/wine/arm64x-windows/";\n',
-            'arch_install_dirs[arch] = "$(libdir)/wine/%s-windows/";\n',
-        ]
-        inserted = False
-        for anchor in anchors:
-            if anchor in txt:
-                txt = txt.replace(
-                    anchor,
-                    anchor + '        arch_install_dirs[arch] = "$(libdir)/wine/aarch64-windows/";\n',
-                    1,
-                )
-                inserted = True
-                notes.append(f"FIXED: {rel} add aarch64-windows install dir")
-                break
-        if not inserted:
+        pattern = re.compile(r'^(\s*arch_install_dirs\[arch\]\s*=\s*".*-windows/";\s*)$', re.MULTILINE)
+        matches = list(pattern.finditer(txt))
+        if matches:
+            match = matches[-1]
+            indent = re.match(r"^(\s*)", match.group(1)).group(1)
+            insertion = match.group(1) + "\n" + indent + 'arch_install_dirs[arch] = "$(libdir)/wine/aarch64-windows/";'
+            txt = txt[:match.start()] + insertion + txt[match.end():]
+            notes.append(f"FIXED: {rel} add aarch64-windows install dir")
+        else:
             notes.append(f"WARN: {rel} could not place aarch64-windows install dir")
 
     write_text(path, txt)
@@ -395,6 +421,9 @@ def fallback_fix_makedep(wine_src):
 
 def apply_fallbacks(wine_src, failed_patch_names):
     notes = []
+
+    if "dlls_ntdll_loader_c.patch" in failed_patch_names:
+        notes.extend(fallback_fix_loader(wine_src))
 
     if "include_winnt_h.patch" in failed_patch_names:
         notes.extend(fallback_fix_winnt(wine_src))
