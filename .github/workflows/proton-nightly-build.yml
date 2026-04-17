@@ -136,7 +136,7 @@ jobs:
             build_script: build-step-arm64ec.sh
             output_dir: compiled-files-aarch64
             prefix_pack: prefixPack-arm64ec.txz
-            profile_version: 11-1
+            profile_version: 11-arm64ec
             display_arch: ARM64EC
             sysvshm: true
 
