@@ -62,29 +62,55 @@ def main():
         "{\n"
         "    struct uffdio_api uffdio_api;\n"
         "\n"
-        "    uffd_fd = syscall( __NR_userfaultfd, O_CLOEXEC | O_NONBLOCK | UFFD_USER_MODE_ONLY );\n",
+        "    uffd_fd = syscall( __NR_userfaultfd, O_CLOEXEC | O_NONBLOCK | UFFD_USER_MODE_ONLY );\n"
+        "    if (uffd_fd == -1) return;\n"
+        "\n"
+        "    uffdio_api.api = UFFD_API;\n"
+        "    uffdio_api.features = UFFD_FEATURE_WP_ASYNC | UFFD_FEATURE_WP_UNPOPULATED;\n"
+        "    if (ioctl( uffd_fd, UFFDIO_API, &uffdio_api ) || uffdio_api.api != UFFD_API)\n"
+        "    {\n"
+        "        close( uffd_fd );\n"
+        "        return;\n"
+        "    }\n"
+        "    pagemap_fd = open( \"/proc/self/pagemap\", O_CLOEXEC | O_RDONLY );\n"
+        "    if (pagemap_fd == -1)\n"
+        "    {\n"
+        "        ERR( \"Error opening /proc/self/pagemap.\\n\" );\n"
+        "        close( uffd_fd );\n"
+        "        return;\n"
+        "    }\n"
+        "    use_kernel_writewatch = 1;\n"
+        "    TRACE( \"Using kernel write watches.\\n\" );\n"
+        "}\n",
         "static void kernel_writewatch_init(void)\n"
         "{\n"
         "#ifndef __ANDROID__\n"
         "    struct uffdio_api uffdio_api;\n"
         "\n"
-        "    uffd_fd = syscall( __NR_userfaultfd, O_CLOEXEC | O_NONBLOCK | UFFD_USER_MODE_ONLY );\n",
-    )
-    total += n
-
-    src, n = apply(
-        src,
-        "android kernel_writewatch fallback tail",
+        "    uffd_fd = syscall( __NR_userfaultfd, O_CLOEXEC | O_NONBLOCK | UFFD_USER_MODE_ONLY );\n"
+        "    if (uffd_fd == -1) return;\n"
+        "\n"
+        "    uffdio_api.api = UFFD_API;\n"
+        "    uffdio_api.features = UFFD_FEATURE_WP_ASYNC | UFFD_FEATURE_WP_UNPOPULATED;\n"
+        "    if (ioctl( uffd_fd, UFFDIO_API, &uffdio_api ) || uffdio_api.api != UFFD_API)\n"
+        "    {\n"
+        "        close( uffd_fd );\n"
+        "        return;\n"
+        "    }\n"
+        "    pagemap_fd = open( \"/proc/self/pagemap\", O_CLOEXEC | O_RDONLY );\n"
+        "    if (pagemap_fd == -1)\n"
+        "    {\n"
+        "        ERR( \"Error opening /proc/self/pagemap.\\n\" );\n"
+        "        close( uffd_fd );\n"
+        "        return;\n"
+        "    }\n"
         "    use_kernel_writewatch = 1;\n"
-        "}\n"
-        "#else\n",
-        "    use_kernel_writewatch = 1;\n"
+        "    TRACE( \"Using kernel write watches.\\n\" );\n"
         "#else\n"
         '    TRACE( "Kernel writewatches are not supported on Android\\n" );\n'
         "    use_kernel_writewatch = 0;\n"
         "#endif\n"
-        "}\n"
-        "#else\n",
+        "}\n",
     )
     total += n
 
