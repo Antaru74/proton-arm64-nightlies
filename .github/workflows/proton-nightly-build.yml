@@ -485,6 +485,33 @@ jobs:
           python3 scripts/filter_patches.py wine-source/build-scripts/build-step-x86_64.sh wine-source
           python3 scripts/patch_build_script.py wine-source/build-scripts/build-step-arm64ec.sh
           python3 scripts/patch_build_script.py wine-source/build-scripts/build-step-x86_64.sh
+          python3 <<'PY'
+          from pathlib import Path
+
+          drop = {
+              '"dlls_ntdll_unix_virtual_c.patch"',
+              '"test-bylaws/dlls_ntdll_unix_thread_c.patch"',
+          }
+
+          for rel in (
+              "wine-source/build-scripts/build-step-arm64ec.sh",
+              "wine-source/build-scripts/build-step-x86_64.sh",
+          ):
+              path = Path(rel)
+              lines = path.read_text(encoding="utf-8").splitlines()
+              removed = []
+              kept = []
+              for line in lines:
+                  if line.strip() in drop:
+                      removed.append(line.strip().strip('"'))
+                      continue
+                  kept.append(line)
+              path.write_text("\n".join(kept) + "\n", encoding="utf-8")
+              if removed:
+                  print(f"Removed forced patch entries from {path}: {', '.join(removed)}")
+              else:
+                  print(f"No forced patch entries needed removal in {path}")
+          PY
 
           python3 scripts/fix_window_c.py wine-source
           python3 scripts/fix_wineboot_c.py wine-source
