@@ -75,6 +75,11 @@ ALREADY_APPLIED = {
     "test-bylaws/tools_makedep_c.patch":             ("tools/makedep.c",              ['arch_install_dirs[arch] = strmake( "$(libdir)/wine/%s-windows", archs.str[arch] );', "output_symlink_rule("]),
 }
 
+NOT_APPLICABLE_IF_MISSING = {
+    "dlls_ntdll_unix_esync_c.patch": "dlls/ntdll/unix/esync.c",
+    "server_esync_c.patch": "server/esync.c",
+}
+
 
 def is_already_applied(wine_src, rel_file, markers):
     path = os.path.join(wine_src, rel_file)
@@ -101,6 +106,20 @@ def main():
         content = f.read()
 
     skipped = []
+    for patch_name, rel_file in NOT_APPLICABLE_IF_MISSING.items():
+        path = os.path.join(wine_src, rel_file)
+        if os.path.exists(path):
+            continue
+        pattern = r'(\s*)"' + re.escape(patch_name) + r'"'
+        replacement = r'\1# (not applicable on current upstream) # "' + patch_name + '"'
+        new_content = re.sub(pattern, replacement, content)
+        if new_content != content:
+            content = new_content
+            skipped.append(patch_name)
+            print(f"SKIP (missing upstream target): {patch_name}")
+        else:
+            print(f"NOT FOUND IN SCRIPT (no change): {patch_name}")
+
     for patch_name, (rel_file, markers) in ALREADY_APPLIED.items():
         if patch_name in FORCE_SKIP:
             pattern = r'(\s*)"' + re.escape(patch_name) + r'"'
