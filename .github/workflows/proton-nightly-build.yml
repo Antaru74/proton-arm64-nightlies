@@ -749,14 +749,19 @@ jobs:
             local root="$1"
             local candidate
 
+            if [ -z "$root" ]; then
+              echo "ERROR: ensure_launcher requires a non-empty root path" >&2
+              return 1
+            fi
+
             mkdir -p "$root/bin"
 
             if [ ! -e "$root/bin/wine64" ]; then
               for candidate in \
-                "$root/bin/wine64" \
                 "$root/lib/wine/wine64" \
                 "$root/lib/wine/aarch64-unix/wine64" \
                 "$PWD/loader64/wine64" \
+                "$PWD/loader64/wine64.exe.so" \
                 "$PWD/loader64/wine64-preloader"; do
                 if [ -f "$candidate" ] && [ ! -e "$root/bin/$(basename "$candidate")" ]; then
                   cp -f "$candidate" "$root/bin/$(basename "$candidate")"
@@ -770,13 +775,17 @@ jobs:
               echo "created bin/wine from bin/wine64"
             fi
 
+            if [ ! -e "$root/bin/wine" ] && [ -f "$root/bin/wine64.exe.so" ]; then
+              cp -f "$root/bin/wine64.exe.so" "$root/bin/wine"
+              echo "created bin/wine from bin/wine64.exe.so"
+            fi
+
             if [ ! -e "$root/bin/wine" ]; then
               echo "ERROR: no runnable wine launcher found under $root" >&2
               return 1
             fi
           }
 
-          ensure_launcher "$install_dir"
           ensure_launcher "$OUTPUT_DIR"
 
           echo "=== normalized bin contents ==="
