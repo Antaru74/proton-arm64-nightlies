@@ -4,10 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       wine_version:
-        description: 'Wine version (e.g., 9.0, 10.0)'
+        description: 'Wine version (stable/staging/devel)'
         required: false
-        default: '10.0'
-        type: string
+        default: 'stable'
+        type: choice
+        options:
+          - stable
+          - staging
+          - devel
       target_arch:
         description: 'Target architecture'
         required: false
@@ -15,7 +19,7 @@ on:
         type: choice
         options:
           - aarch64
-          - armv7l
+          - arm
           - i686
           - x86_64
 
@@ -38,7 +42,6 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          sudo dpkg --add-architecture i386
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
@@ -56,7 +59,6 @@ jobs:
             mingw-w64 \
             gcc-multilib \
             g++-multilib \
-            libfontconfig1-dev \
             libfreetype6-dev \
             libpng-dev \
             zlib1g-dev \
@@ -67,11 +69,33 @@ jobs:
             python3-pip \
             dpkg-dev \
             fakeroot \
-            debhelper
+            debhelper \
+            libasound2-dev \
+            libpulse-dev \
+            libdbus-1-dev \
+            libfontconfig1-dev \
+            libgl1-mesa-dev \
+            libglu1-mesa-dev \
+            libgstreamer1.0-dev \
+            libgstreamer-plugins-base1.0-dev \
+            libosmesa6-dev \
+            libudev-dev \
+            libvulkan-dev \
+            libx11-dev \
+            libxcomposite-dev \
+            libxcursor-dev \
+            libxfixes-dev \
+            libxi-dev \
+            libxinerama-dev \
+            libxrandr-dev \
+            libxrender-dev \
+            libxss-dev \
+            libxtst-dev \
+            libxxf86vm-dev
 
       - name: Setup Android NDK
         run: |
-          NDK_VERSION="r27d"
+          NDK_VERSION="r27c"
           NDK_DIR="$HOME/android-ndk"
           if [ ! -d "$NDK_DIR" ]; then
             wget -q "https://dl.google.com/android/repository/android-ndk-${NDK_VERSION}-linux.zip"
@@ -80,211 +104,268 @@ jobs:
             rm "android-ndk-${NDK_VERSION}-linux.zip"
           fi
           echo "ANDROID_NDK_HOME=$NDK_DIR" >> $GITHUB_ENV
-          echo "$NDK_DIR/bin" >> $GITHUB_PATH
+          echo "$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
-      - name: Setup cross-compilation toolchain
+      - name: Setup architecture variables
         run: |
           ARCH="${{ github.event.inputs.target_arch }}"
           case "$ARCH" in
             aarch64)
-              echo "HOST=arm-linux-androideabi" >> $GITHUB_ENV
-              echo "ARCH_TRIPLE=aarch64-linux-android" >> $GITHUB_ENV
+              echo "TRIPLE=aarch64-linux-android" >> $GITHUB_ENV
+              echo "NDK_ARCH=arm64" >> $GITHUB_ENV
+              echo "LIB_ARCH=arm64" >> $GITHUB_ENV
               ;;
-            armv7l)
-              echo "HOST=arm-linux-androideabi" >> $GITHUB_ENV
-              echo "ARCH_TRIPLE=armv7a-linux-androideabi" >> $GITHUB_ENV
+            arm)
+              echo "TRIPLE=armv7a-linux-androideabi" >> $GITHUB_ENV
+              echo "NDK_ARCH=arm" >> $GITHUB_ENV
+              echo "LIB_ARCH=arm" >> $GITHUB_ENV
               ;;
             i686)
-              echo "HOST=i686-linux-android" >> $GITHUB_ENV
-              echo "ARCH_TRIPLE=i686-linux-android" >> $GITHUB_ENV
+              echo "TRIPLE=i686-linux-android" >> $GITHUB_ENV
+              echo "NDK_ARCH=x86" >> $GITHUB_ENV
+              echo "LIB_ARCH=x86" >> $GITHUB_ENV
               ;;
             x86_64)
-              echo "HOST=x86_64-linux-android" >> $GITHUB_ENV
-              echo "ARCH_TRIPLE=x86_64-linux-android" >> $GITHUB_ENV
+              echo "TRIPLE=x86_64-linux-android" >> $GITHUB_ENV
+              echo "NDK_ARCH=x86_64" >> $GITHUB_ENV
+              echo "LIB_ARCH=x86_64" >> $GITHUB_ENV
               ;;
           esac
+          echo "API_LEVEL=21" >> $GITHUB_ENV
 
-      - name: Clone Wine source
+      - name: Clone Termux-patched Wine
         run: |
-          WINE_VERSION="${{ github.event.inputs.wine_version }}"
-          git clone --depth=1 --branch "wine-${WINE_VERSION}" \
-            https://gitlab.winehq.org/wine/wine.git wine-source \
-            || git clone --depth=1 https://gitlab.winehq.org/wine/wine.git wine-source
+          # Use Termux's Wine build scripts
+          git clone https://github.com/termux/termux-packages.git
+          
+          # Get Wine version
+          if [ "${{ github.event.inputs.wine_version }}" = "stable" ]; then
+            WINE_VER=$(curl -s https://dl.winehq.org/wine/source/stable/ | grep -oP 'wine-\d+\.\d+(\.\d+)?\.tar\.xz' | tail -1 | sed 's/wine-//' | sed 's/\.tar\.xz//')
+          elif [ "${{ github.event.inputs.wine_version }}" = "staging" ]; then
+            WINE_VER=$(curl -s https://dl.winehq.org/wine/source/stable/ | grep -oP 'wine-\d+\.\d+(\.\d+)?\.tar\.xz' | tail -1 | sed 's/wine-//' | sed 's/\.tar\.xz//')
+          else
+            WINE_VER=$(curl -s https://dl.winehq.org/wine/source/devel/ | grep -oP 'wine-\d+\.\d+(\.\d+)?\.tar\.xz' | tail -1 | sed 's/wine-//' | sed 's/\.tar\.xz//')
+          fi
+          
+          echo "WINE_VERSION=$WINE_VER" >> $GITHUB_ENV
+          
+          # Download Wine source
+          if [ "${{ github.event.inputs.wine_version }}" = "devel" ]; then
+            wget -q "https://dl.winehq.org/wine/source/devel/wine-${WINE_VER}.tar.xz"
+          else
+            wget -q "https://dl.winehq.org/wine/source/stable/wine-${WINE_VER}.tar.xz"
+          fi
+          
+          tar -xf "wine-${WINE_VER}.tar.xz"
+          mv "wine-${WINE_VER}" wine-source
 
-      - name: Apply Android patches
+      - name: Apply Termux patches
         run: |
           cd wine-source
-          # Create Android-specific configuration
-          cat > android-configure << 'EOF'
-          #!/bin/bash
-          export PATH="$ANDROID_NDK_HOME/bin:$PATH"
-          export CC="${ARCH_TRIPLE}21-clang"
-          export CXX="${ARCH_TRIPLE}21-clang++"
-          export AR="${ARCH_TRIPLE}-ar"
-          export AS="${ARCH_TRIPLE}-as"
-          export LD="${ARCH_TRIPLE}-ld"
-          export RANLIB="${ARCH_TRIPLE}-ranlib"
-          export STRIP="${ARCH_TRIPLE}-strip"
           
+          # Find and apply Termux patches
+          PATCH_DIR="../termux-packages/packages/wine"
+          if [ -d "$PATCH_DIR" ]; then
+            for patch in "$PATCH_DIR"/*.patch; do
+              if [ -f "$patch" ]; then
+                echo "Applying patch: $(basename $patch)"
+                patch -p1 < "$patch" || true
+              fi
+            done
+          fi
+          
+          # Create cross-compile configuration
+          cat > configure-cross << 'EOF'
+          #!/bin/bash
+          export PATH="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+          
+          # Set compiler for Android
+          export CC="${TRIPLE}${API_LEVEL}-clang"
+          export CXX="${TRIPLE}${API_LEVEL}-clang++"
+          export AR="${TRIPLE}-ar"
+          export AS="${TRIPLE}-as"
+          export LD="${TRIPLE}-ld"
+          export RANLIB="${TRIPLE}-ranlib"
+          export STRIP="${TRIPLE}-strip"
+          
+          # Additional flags for Android
+          export CFLAGS="-D__ANDROID_API__=${API_LEVEL} -I${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include"
+          export LDFLAGS="-L${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/${TRIPLE}/${API_LEVEL}"
+          
+          # Configure for Android
           ./configure \
-            --host="${ARCH_TRIPLE}" \
-            --target="${ARCH_TRIPLE}" \
+            --host="${TRIPLE}${API_LEVEL}" \
+            --target="${TRIPLE}${API_LEVEL}" \
             --prefix="/data/data/com.termux/files/usr" \
+            --with-wine64 \
+            --disable-tests \
             --without-x \
             --without-freetype \
             --without-fontconfig \
             --without-gstreamer \
             --without-vulkan \
             --without-opengl \
-            --disable-tests \
-            --disable-winemenubuilder \
+            --without-oss \
+            --without-capi \
+            --without-cups \
+            --without-gettext \
+            --without-gphoto \
+            --without-gssapi \
+            --without-krb5 \
+            --without-opencl \
+            --without-pcsclite \
+            --without-sane \
+            --without-udev \
+            --without-usb \
+            --without-v4l2 \
+            --without-gnutls \
             --enable-win64
           EOF
-          chmod +x android-configure
+          
+          chmod +x configure-cross
 
       - name: Configure Wine
         run: |
           cd wine-source
-          ./android-configure
+          ./configure-cross 2>&1 | tee configure.log || {
+            echo "=== Configure failed. Showing config.log ==="
+            cat config.log | tail -100
+            exit 1
+          }
 
       - name: Build Wine
         run: |
           cd wine-source
-          make -j$(nproc)
+          make -j$(nproc) 2>&1 | tee build.log
+          
+          # Create install directory
+          mkdir -p install/data/data/com.termux/files/usr
           make install DESTDIR="$PWD/install"
 
       - name: Create Debian package structure
         run: |
-          VERSION="${{ github.event.inputs.wine_version }}"
+          WINE_VER="${{ env.WINE_VERSION }}"
           ARCH="${{ github.event.inputs.target_arch }}"
-          PACKAGE_NAME="wine-termux_${VERSION}_${ARCH}"
-          mkdir -p "$PACKAGE_NAME/DEBIAN"
-          mkdir -p "$PACKAGE_NAME/data/data/com.termux/files/usr"
+          PACKAGE_NAME="wine-termux_${WINE_VER}_${ARCH}"
           
-          # Copy built files
-          cp -r wine-source/install/data/data/com.termux/files/usr/* \
-            "$PACKAGE_NAME/data/data/com.termux/files/usr/" 2>/dev/null || \
-          cp -r wine-source/install/usr/* \
-            "$PACKAGE_NAME/data/data/com.termux/files/usr/" 2>/dev/null || true
+          mkdir -p "$PACKAGE_NAME/DEBIAN"
+          
+          # Copy files from install directory
+          if [ -d "wine-source/install/data/data/com.termux/files/usr" ]; then
+            mkdir -p "$PACKAGE_NAME/data/data/com.termux/files"
+            cp -r wine-source/install/data/data/com.termux/files/usr \
+              "$PACKAGE_NAME/data/data/com.termux/files/"
+          elif [ -d "wine-source/install/usr" ]; then
+            mkdir -p "$PACKAGE_NAME/data/data/com.termux/files"
+            cp -r wine-source/install/usr \
+              "$PACKAGE_NAME/data/data/com.termux/files/"
+          fi
+
+      - name: Create Termux wrapper scripts
+        run: |
+          WINE_VER="${{ env.WINE_VERSION }}"
+          ARCH="${{ github.event.inputs.target_arch }}"
+          PACKAGE_NAME="wine-termux_${WINE_VER}_${ARCH}"
+          
+          # Create bin directory
+          mkdir -p "$PACKAGE_NAME/data/data/com.termux/files/usr/bin"
+          
+          # Create main wine wrapper
+          cat > "$PACKAGE_NAME/data/data/com.termux/files/usr/bin/wine" << 'EOF'
+          #!/data/data/com.termux/files/usr/bin/bash
+          
+          # Termux-specific Wine wrapper
+          export WINEPREFIX="${WINEPREFIX:-$HOME/.wine}"
+          export WINEDLLPATH="${PREFIX}/lib/wine"
+          export PATH="${PREFIX}/bin:${PATH}"
+          export LD_LIBRARY_PATH="${PREFIX}/lib:${LD_LIBRARY_PATH}"
+          
+          # Android shared memory
+          export WINEDLLOVERRIDES="winemenubuilder.exe=d"
+          
+          # Run Wine
+          exec "${PREFIX}/bin/wine.real" "$@"
+          EOF
+          
+          # Create winecfg wrapper
+          cat > "$PACKAGE_NAME/data/data/com.termux/files/usr/bin/winecfg" << 'EOF'
+          #!/data/data/com.termux/files/usr/bin/bash
+          exec wine winecfg.exe "$@"
+          EOF
+          
+          # Create regedit wrapper
+          cat > "$PACKAGE_NAME/data/data/com.termux/files/usr/bin/regedit" << 'EOF'
+          #!/data/data/com.termux/files/usr/bin/bash
+          exec wine regedit.exe "$@"
+          EOF
+          
+          chmod +x "$PACKAGE_NAME/data/data/com.termux/files/usr/bin/"*
 
       - name: Create DEBIAN control file
         run: |
-          VERSION="${{ github.event.inputs.wine_version }}"
+          WINE_VER="${{ env.WINE_VERSION }}"
           ARCH="${{ github.event.inputs.target_arch }}"
+          PACKAGE_NAME="wine-termux_${WINE_VER}_${ARCH}"
           
-          cat > "wine-termux_${VERSION}_${ARCH}/DEBIAN/control" << EOF
+          cat > "$PACKAGE_NAME/DEBIAN/control" << EOF
           Package: wine-termux
-          Version: ${VERSION}
+          Version: ${WINE_VER}
           Architecture: ${ARCH}
           Maintainer: Termux Wine Builder <wine@termux.org>
-          Depends: termux-exec, libandroid-shmem, libandroid-support
+          Installed-Size: $(du -sk "$PACKAGE_NAME/data" | cut -f1)
+          Depends: termux-exec, libandroid-shmem, libandroid-support, libc++
+          Section: interpreters
+          Priority: optional
+          Homepage: https://www.winehq.org
           Description: Wine for Termux - Windows compatibility layer
            Wine is a compatibility layer capable of running Windows applications
            on several POSIX-compliant operating systems, such as Linux, macOS,
            and BSD. This package is specifically built for Termux on Android.
-          Homepage: https://www.winehq.org
-          Section: utils
-          Priority: optional
+           .
+           This build is optimized for Android and includes Termux-specific patches.
           EOF
 
       - name: Create post-installation script
         run: |
-          VERSION="${{ github.event.inputs.wine_version }}"
+          WINE_VER="${{ env.WINE_VERSION }}"
           ARCH="${{ github.event.inputs.target_arch }}"
+          PACKAGE_NAME="wine-termux_${WINE_VER}_${ARCH}"
           
-          cat > "wine-termux_${VERSION}_${ARCH}/DEBIAN/postinst" << 'EOF'
+          cat > "$PACKAGE_NAME/DEBIAN/postinst" << 'EOF'
           #!/data/data/com.termux/files/usr/bin/bash
           
-          # Create Wine configuration directory
-          mkdir -p $HOME/.wine
+          set -e
           
-          # Set up Wine prefix if not exists
-          if [ ! -f $HOME/.wine/system.reg ]; then
-            echo "Initializing Wine prefix..."
-            wineboot -u 2>/dev/null || true
+          echo "Configuring Wine for Termux..."
+          
+          # Create Wine prefix if not exists
+          if [ ! -d "$HOME/.wine" ]; then
+            echo "Initializing Wine prefix (this may take a moment)..."
+            wine wineboot -u 2>/dev/null || true
           fi
           
-          # Create wrapper script
-          cat > $PREFIX/bin/wine-wrapper << 'WRAPPER'
+          # Create additional wrappers
+          cat > $PREFIX/bin/winetricks << 'WINETRICKS'
           #!/data/data/com.termux/files/usr/bin/bash
-          export WINEPREFIX="$HOME/.wine"
-          export WINEDLLPATH="$PREFIX/lib/wine"
-          exec wine "$@"
-          WRAPPER
+          echo "Winetricks for Termux is not fully supported yet."
+          echo "Use at your own risk."
+          exec winetricks.real "$@"
+          WINETRICKS
           
-          chmod +x $PREFIX/bin/wine-wrapper
+          chmod +x $PREFIX/bin/winetricks 2>/dev/null || true
           
-          echo "Wine has been installed successfully!"
-          echo "Run 'wine-wrapper' to start Windows applications"
+          echo "Wine ${{ env.WINE_VERSION }} has been installed successfully!"
+          echo "Usage: wine <windows-program.exe>"
+          echo "First time setup: Run 'winecfg' to configure Wine"
           EOF
           
-          chmod 755 "wine-termux_${VERSION}_${ARCH}/DEBIAN/postinst"
-
-      - name: Create prerm script
-        run: |
-          VERSION="${{ github.event.inputs.wine_version }}"
-          ARCH="${{ github.event.inputs.target_arch }}"
-          
-          cat > "wine-termux_${VERSION}_${ARCH}/DEBIAN/prerm" << 'EOF'
-          #!/data/data/com.termux/files/usr/bin/bash
-          
-          # Remove wrapper script
-          rm -f $PREFIX/bin/wine-wrapper
-          
-          echo "Wine is being removed..."
-          EOF
-          
-          chmod 755 "wine-termux_${VERSION}_${ARCH}/DEBIAN/prerm"
-
-      - name: Create Termux-specific wrapper scripts
-        run: |
-          VERSION="${{ github.event.inputs.wine_version }}"
-          ARCH="${{ github.event.inputs.target_arch }}"
-          PACKAGE_DIR="wine-termux_${VERSION}_${ARCH}"
-          
-          # Create bin directory
-          mkdir -p "$PACKAGE_DIR/data/data/com.termux/files/usr/bin"
-          
-          # Create wine launcher script
-          cat > "$PACKAGE_DIR/data/data/com.termux/files/usr/bin/wine-termux" << 'EOF'
-          #!/data/data/com.termux/files/usr/bin/bash
-          
-          export WINEPREFIX="${WINEPREFIX:-$HOME/.wine}"
-          export WINEDLLPATH="${PREFIX}/lib/wine"
-          export PATH="${PREFIX}/bin:${PATH}"
-          
-          # Android-specific environment
-          export LD_LIBRARY_PATH="${PREFIX}/lib:${LD_LIBRARY_PATH}"
-          
-          # Run Wine
-          exec "${PREFIX}/bin/wine" "$@"
-          EOF
-          
-          chmod +x "$PACKAGE_DIR/data/data/com.termux/files/usr/bin/wine-termux"
-          
-          # Create symlink
-          ln -sf wine-termux "$PACKAGE_DIR/data/data/com.termux/files/usr/bin/wine"
-
-      - name: Create Termux startup script
-        run: |
-          VERSION="${{ github.event.inputs.wine_version }}"
-          ARCH="${{ github.event.inputs.target_arch }}"
-          PACKAGE_DIR="wine-termux_${VERSION}_${ARCH}"
-          
-          mkdir -p "$PACKAGE_DIR/data/data/com.termux/files/usr/etc/profile.d"
-          
-          cat > "$PACKAGE_DIR/data/data/com.termux/files/usr/etc/profile.d/wine.sh" << 'EOF'
-          # Wine environment for Termux
-          export WINEPREFIX="$HOME/.wine"
-          export WINEDLLPATH="$PREFIX/lib/wine"
-          alias wine='wine-termux'
-          EOF
+          chmod 755 "$PACKAGE_NAME/DEBIAN/postinst"
 
       - name: Build Debian package
         run: |
-          VERSION="${{ github.event.inputs.wine_version }}"
+          WINE_VER="${{ env.WINE_VERSION }}"
           ARCH="${{ github.event.inputs.target_arch }}"
-          PACKAGE_NAME="wine-termux_${VERSION}_${ARCH}"
+          PACKAGE_NAME="wine-termux_${WINE_VER}_${ARCH}"
           
           # Build .deb package
           dpkg-deb --build --root-owner-group "$PACKAGE_NAME"
@@ -295,39 +376,61 @@ jobs:
           
           echo "=== Package info ==="
           dpkg-deb --info "${PACKAGE_NAME}.deb"
+          
+          # Calculate checksum
+          sha256sum "${PACKAGE_NAME}.deb" > "${PACKAGE_NAME}.deb.sha256"
 
       - name: Upload Debian package
         uses: actions/upload-artifact@v4
         with:
-          name: wine-termux-${{ github.event.inputs.target_arch }}
-          path: wine-termux_*.deb
+          name: wine-termux-${{ github.event.inputs.target_arch }}-${{ env.WINE_VERSION }}
+          path: |
+            wine-termux_*.deb
+            wine-termux_*.deb.sha256
           retention-days: 30
 
       - name: Create GitHub Release
         if: github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: wine-termux-${{ github.event.inputs.wine_version }}-${{ github.event.inputs.target_arch }}-${{ github.run_number }}
-          name: "Wine ${{ github.event.inputs.wine_version }} for Termux (${{ github.event.inputs.target_arch }})"
+          tag_name: wine-termux-${{ env.WINE_VERSION }}-${{ github.event.inputs.target_arch }}-${{ github.run_number }}
+          name: "Wine ${{ env.WINE_VERSION }} for Termux (${{ github.event.inputs.target_arch }})"
           body: |
-            Wine ${{ github.event.inputs.wine_version }} built for Termux on ${{ github.event.inputs.target_arch }} architecture.
+            Wine ${{ env.WINE_VERSION }} built for Termux on ${{ github.event.inputs.target_arch }} architecture.
             
             ## Installation
             ```bash
-            dpkg -i wine-termux_${{ github.event.inputs.wine_version }}_${{ github.event.inputs.target_arch }}.deb
+            # Download the .deb file
+            wget https://github.com/${{ github.repository }}/releases/download/wine-termux-${{ env.WINE_VERSION }}-${{ github.event.inputs.target_arch }}-${{ github.run_number }}/wine-termux_${{ env.WINE_VERSION }}_${{ github.event.inputs.target_arch }}.deb
+            
+            # Install
+            dpkg -i wine-termux_${{ env.WINE_VERSION }}_${{ github.event.inputs.target_arch }}.deb
+            
+            # Fix dependencies if needed
+            apt install -f
             ```
             
             ## Usage
             ```bash
-            wine-termux program.exe
-            # or
+            # Run Windows programs
             wine program.exe
+            
+            # Configure Wine
+            winecfg
+            
+            # Registry editor
+            regedit
             ```
             
-            ## Features
-            - Optimized for Termux environment
-            - No X11 dependencies (uses Android display)
-            - Lightweight build
+            ## Requirements
+            - Termux from F-Droid (not Google Play)
+            - Android 5.0 or higher
+            - At least 500MB free space for Wine prefix
+            
+            ## Notes
+            - First run will initialize Wine prefix (~300MB)
+            - Some applications may not work due to Android limitations
+            - No X11 support - uses Android's native display
           files: wine-termux_*.deb
           draft: false
           prerelease: true
