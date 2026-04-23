@@ -1,4 +1,4 @@
-name: Build Proton ARM64 Nightly (Termux)
+name: Build Proton ARM64 Android (NDK Wine)
 
 on:
   workflow_dispatch:
@@ -8,58 +8,92 @@ jobs:
     runs-on: ubuntu-22.04
 
     env:
-      PREFIX: /data/data/com.termux/files/usr
-      ARCH: arm64
+      BUILD_NAME: proton-arm64-nightly
 
     steps:
+    # =========================
+    # DEPENDENCIES
+    # =========================
     - name: Install dependencies
       run: |
         sudo apt update
         sudo apt install -y \
-          git wget curl zip unzip \
+          git wget curl zip unzip file \
           build-essential clang llvm lld \
           python3 cmake ninja-build meson \
           autoconf automake libtool \
           pkg-config flex bison \
-          zstd file
+          zstd
 
+    # =========================
+    # CLONE REPO
+    # =========================
     - name: Clone Proton ARM64 repo
       run: |
         git clone --recursive https://github.com/Antaru74/proton-arm64-nightlies.git proton
 
-    - name: Setup LLVM-MINGW toolchain
+    # =========================
+    # SETUP ANDROID NDK (REQUIRED)
+    # =========================
+    - name: Download Android NDK r27c
       run: |
-        wget https://github.com/bylaws/llvm-mingw/releases/download/20250305/llvm-mingw-20250305-ucrt-ubuntu-20.04-x86_64.tar.xz
-        tar -xf llvm-mingw-*.tar.xz
-        echo "$(pwd)/llvm-mingw-*/bin" >> $GITHUB_PATH
+        wget -q https://dl.google.com/android/repository/android-ndk-r27c-linux.zip
+        unzip -q android-ndk-r27c-linux.zip
+        mv android-ndk-r27c $HOME/android-ndk
+
+        echo "ANDROID_NDK_HOME=$HOME/android-ndk" >> $GITHUB_ENV
 
     # =========================
-    # CONFIGURE STEP (IMPORTANT)
+    # CLONE WINE SOURCE (REQUIRED BY SCRIPT)
     # =========================
-    - name: Configure Proton ARM64
+    - name: Clone Wine source
+      run: |
+        git clone https://github.com/wine-mirror/wine.git proton/wine-source
+
+    # =========================
+    # SETUP TOOL PERMISSION
+    # =========================
+    - name: Prepare scripts
       run: |
         cd proton
-        chmod +x scripts/configure-arm64-build.sh
-
-        ./scripts/configure-arm64-build.sh \
-          --prefix=$PREFIX/opt/proton-arm64 \
-          --arch=$ARCH
+        chmod +x scripts/*.sh
 
     # =========================
-    # BUILD STEP
+    # CONFIGURE BUILD (NDK CROSS COMPILE)
+    # =========================
+    - name: Configure ARM64 build
+      run: |
+        cd proton
+
+        ./scripts/configure-arm64-build.sh \
+          --ndk-path "$ANDROID_NDK_HOME" \
+          --source-dir ./wine-source \
+          --build-dir ./wine-build \
+          --api 28 \
+          --name proton-arm64-nightly
+
+    # =========================
+    # BUILD HOST TOOLS (WAJIB STEP)
+    # =========================
+    - name: Build host tools
+      run: |
+        cd proton/wine-build/tools
+        make -j$(nproc) __tooldeps__ || make -j$(nproc)
+
+    # =========================
+    # BUILD TARGET (ARM64 ANDROID)
     # =========================
     - name: Build Proton ARM64
       run: |
-        cd proton
-        chmod +x scripts/build-proton-arm64.sh
-        ./scripts/build-proton-arm64.sh -j$(nproc)
+        cd proton/wine-build/target
+        make -j$(nproc)
 
     # =========================
-    # STAGING INSTALL
+    # INSTALL STAGING
     # =========================
     - name: Install to staging
       run: |
-        cd proton
+        cd proton/wine-build/target
         make install DESTDIR=$PWD/pkg || true
 
     # =========================
@@ -67,38 +101,44 @@ jobs:
     # =========================
     - name: Cleanup
       run: |
-        find proton/pkg -name "*.a" -delete || true
-        find proton/pkg -name "*.la" -delete || true
+        find proton/wine-build -name "*.a" -delete || true
+        find proton/wine-build -name "*.la" -delete || true
 
     # =========================
-    # PACKAGE DEB
+    # PACKAGE FOR TERMUX (.DEB)
     # =========================
-    - name: Create .deb structure
+    - name: Create deb structure
       run: |
         mkdir -p deb/DEBIAN
         mkdir -p deb/data/data/com.termux/files/usr
 
-        if [ -d proton/pkg ]; then
-          cp -r proton/pkg/data/data/com.termux/files/usr/* \
+        if [ -d proton/wine-build/target/pkg ]; then
+          cp -r proton/wine-build/target/pkg/* \
             deb/data/data/com.termux/files/usr/ || true
         fi
 
     - name: Create control file
       run: |
         cat <<EOF > deb/DEBIAN/control
-        Package: proton-arm64-nightly
+        Package: proton-arm64-ndk
         Version: 1.0
         Architecture: arm64
         Maintainer: Antaru74
-        Description: Proton ARM64 Nightly build for Termux
+        Description: Proton/Wine ARM64 Android (NDK build)
         EOF
 
-    - name: Build .deb
+    # =========================
+    # BUILD DEB
+    # =========================
+    - name: Build .deb package
       run: |
         dpkg-deb -Zxz -z9 --build deb proton-arm64.deb
 
+    # =========================
+    # UPLOAD ARTIFACT
+    # =========================
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: proton-arm64-deb
+        name: proton-arm64-ndk
         path: proton-arm64.deb
