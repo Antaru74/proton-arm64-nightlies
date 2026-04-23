@@ -1,4 +1,4 @@
-name: Proton_11 Termux 
+name: Proton_11 Build
 
 on:
   schedule:
@@ -21,58 +21,30 @@ on:
         options:
           - app.gamenative
           - com.winlator.cmod
+          - com.termux
       wine_ref:
-        description: 'Valve Proton ref (branch/tag/commit)'
+        description: 'Valve Proton ref'
         required: false
         default: 'proton_11.0'
         type: string
       gamenative_ref:
-        description: 'GameNative proton-wine ref (branch/tag/commit)'
         required: false
         default: 'proton_10.0'
         type: string
       release_description:
-        description: 'Optional description for packaged profiles and release notes'
         required: false
         default: ''
         type: string
-      disable_gamenative_patches:
-        description: 'Disable all GameNative Android patch application and local patch/fix injections'
-        required: false
-        default: false
-        type: boolean
       force_build:
-        description: 'Force a build even if upstream HEAD is unchanged'
         required: false
         default: false
         type: boolean
-      extra_winebus_patches:
-        description: 'Download and apply optional GE winebus controller patches'
+      build_termux_deb:
         required: false
         default: false
         type: boolean
-      ge_perf_second_pass:
-        description: 'Apply optional GE performance patch bundle, including wow64 OpenGL mapping speedups'
-        required: false
-        default: false
-        type: boolean
-      ge_compat_patch_bundle:
-        description: 'Apply optional GE compatibility patch bundle for common launcher and windowing issues'
-        required: false
-        default: false
-        type: boolean
-      dinput_android_compat_workaround:
-        description: 'Apply Android-only DirectInput raw-input compatibility workaround patch'
-        required: false
-        default: false
-        type: boolean
-      input_poll_debug:
-        description: 'Apply input polling and DirectInput instance debug instrumentation patches'
-        required: false
-        default: false
-        type: boolean
-      enable_ntsync:
-        description: 'Apply the optional ntsync patch series'
+      build_termux_native:
+        description: 'Build native Termux runtime package (aarch64 sysroot staged)'
         required: false
         default: false
         type: boolean
@@ -81,1031 +53,117 @@ jobs:
   prepare:
     runs-on: ${{ github.event.inputs.runner || 'ubuntu-24.04' }}
     outputs:
-      resolved_hash: ${{ steps.upstream_check.outputs.resolved_hash }}
-      resolved_short_hash: ${{ steps.upstream_check.outputs.resolved_short_hash }}
-      skip_build: ${{ steps.upstream_check.outputs.skip_build }}
+      skip_build: ${{ steps.upstream.outputs.skip_build }}
     steps:
-      - name: Checkout this repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Check upstream Proton ref
-        id: upstream_check
+      - name: Check upstream
+        id: upstream
         run: |
-          PROTON_REF="${{ github.event.inputs.wine_ref || 'proton_11.0' }}"
-          FORCE_BUILD="${{ inputs.force_build && 'true' || 'false' }}"
-          PREV_GIT_HASH="$(python3 -c 'import json; d=json.load(open("latest.json")); print(d.get("gitHash",""))')"
-          rm -rf proton-source
-          git clone --depth=1 https://github.com/ValveSoftware/Proton proton-source
-          git -C proton-source fetch --depth=1 origin "$PROTON_REF"
-          git -C proton-source checkout FETCH_HEAD
-          REMOTE_FULL_HASH="$(git -C proton-source ls-tree HEAD wine | awk '{print $3}')"
-          rm -rf proton-source
-
-          REMOTE_SHORT_HASH="$(printf '%s' "$REMOTE_FULL_HASH" | cut -c1-7)"
-          SKIP_BUILD=false
-          if [ "$FORCE_BUILD" != 'true' ] && [ "$REMOTE_SHORT_HASH" = "$PREV_GIT_HASH" ]; then
-            SKIP_BUILD=true
-          fi
-
-          echo "resolved_hash=$REMOTE_FULL_HASH" >> "$GITHUB_OUTPUT"
-          echo "resolved_short_hash=$REMOTE_SHORT_HASH" >> "$GITHUB_OUTPUT"
-          echo "skip_build=$SKIP_BUILD" >> "$GITHUB_OUTPUT"
-          echo "Previous gitHash: $PREV_GIT_HASH"
-          echo "Remote wine submodule gitHash: $REMOTE_SHORT_HASH"
-          echo "force_build=$FORCE_BUILD"
-          echo "skip_build=$SKIP_BUILD"
-
-      - name: Stop early when upstream is unchanged
-        if: steps.upstream_check.outputs.skip_build == 'true'
-        run: |
-          echo "Skipping build: upstream Proton ref matches latest.json"
+          echo "skip_build=false" >> $GITHUB_OUTPUT
 
   build:
     needs: prepare
+    runs-on: ubuntu-24.04
     if: needs.prepare.outputs.skip_build != 'true'
-    runs-on: ${{ github.event.inputs.runner || 'ubuntu-24.04' }}
-    timeout-minutes: 360
-    permissions:
-      contents: write
+
     strategy:
-      fail-fast: false
       matrix:
         include:
           - arch_id: arm64ec
             termux_arch: aarch64
-            build_script: build-step-arm64ec.sh
-            output_dir: compiled-files-aarch64
-            prefix_pack: prefixPack-arm64ec.txz
+            output_dir: out-aarch64
             profile_version: 11-arm64ec
-            display_arch: ARM64EC
-            sysvshm: true
 
     steps:
-      - name: Checkout this repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Free up disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/share/boost
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-          df -h
-
-      - name: Set up build environment
-        run: |
-          sudo dpkg --add-architecture i386
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            git \
-            wget \
-            curl \
-            unzip \
-            flex \
-            bison \
-            gettext \
-            autoconf \
-            automake \
-            libtool \
-            pkg-config \
-            mingw-w64 \
-            gcc-multilib \
-            g++-multilib \
-            libfontconfig1-dev \
-            libfontconfig1-dev:i386 \
-            libfreetype6-dev \
-            libfreetype6-dev:i386 \
-            libpng-dev \
-            libpng-dev:i386 \
-            zlib1g-dev \
-            zlib1g-dev:i386 \
-            zstd \
-            xz-utils \
-            python3-zstandard \
-            patch
-
-      - name: Clone Proton source
-        run: |
-          rm -rf proton-source wine-source
-          PROTON_REF="${{ github.event.inputs.wine_ref || 'proton_11.0' }}"
-          git clone --depth=1 --branch "$PROTON_REF" https://github.com/ValveSoftware/Proton proton-source \
-          || {
-            git clone --depth=1 https://github.com/ValveSoftware/Proton proton-source
-            git -C proton-source fetch --depth=1 origin "$PROTON_REF"
-            git -C proton-source checkout FETCH_HEAD
-          }
-          WINE_URL="$(git -C proton-source config --file .gitmodules --get submodule.wine.url)"
-          case "$WINE_URL" in
-            ../*)
-              WINE_URL="https://github.com/ValveSoftware/${WINE_URL#../}.git"
-              ;;
-            ./*)
-              WINE_URL="https://github.com/ValveSoftware/${WINE_URL#./}.git"
-              ;;
-          esac
-          WINE_COMMIT="$(git -C proton-source ls-tree HEAD wine | awk '{print $3}')"
-          git clone --depth=1 "$WINE_URL" wine-source \
-          || {
-            git clone "$WINE_URL" wine-source
-          }
-          git -C wine-source fetch --depth=1 origin "$WINE_COMMIT"
-          git -C wine-source checkout FETCH_HEAD
-          rm -rf proton-source
-          echo "Proton ref: $PROTON_REF"
-          echo "Wine commit: $WINE_COMMIT"
-          git -C wine-source rev-parse HEAD
-
-      - name: Clone GameNative patches and build scripts
-        run: |
-          GN_REF="${{ github.event.inputs.gamenative_ref || 'proton_10.0' }}"
-          git clone --depth=1 --branch "$GN_REF" \
-            https://github.com/GameNative/proton-wine gamenative-src \
-          || {
-            git clone --depth=1 https://github.com/GameNative/proton-wine gamenative-src
-            git -C gamenative-src fetch --depth=1 origin "$GN_REF"
-            git -C gamenative-src checkout FETCH_HEAD
-          }
-          echo "GameNative ref: $GN_REF"
-          git -C gamenative-src rev-parse HEAD
-          cp -r gamenative-src/android wine-source/android
-          cp -r gamenative-src/build-scripts wine-source/build-scripts
-          rm -rf gamenative-src
-          python3 <<'PY'
-          from pathlib import Path
-
-          for rel in (
-              "wine-source/build-scripts/build-step-arm64ec.sh",
-              "wine-source/build-scripts/build-step-x86_64.sh",
-          ):
-              path = Path(rel)
-              text = path.read_text(encoding="utf-8")
-              new_text = text.replace("--with-fontconfig \\\n", "--without-fontconfig \\\n")
-              if new_text != text:
-                  path.write_text(new_text, encoding="utf-8")
-                  print(f"Patched fontconfig flag in {path}")
-              else:
-                  print(f"No fontconfig flag change needed in {path}")
-          PY
-
-      - name: Prepare patch set and build scripts
-        run: |
-          if [ "${{ inputs.disable_gamenative_patches && 'true' || 'false' }}" = "true" ]; then
-            for f in wine-source/build-scripts/build-step-arm64ec.sh wine-source/build-scripts/build-step-x86_64.sh; do
-              awk 'BEGIN{in_patches=0} /PATCHES=\(/{print; in_patches=1; next} in_patches && /^[[:space:]]*\)/{in_patches=0; print; next} !in_patches{print; next} /"dlls_winepulse_drv_pulse_c.patch"/{print; next} /"dlls_ntdll_unix_esync_c.patch"/{print; next} /"server_esync_c.patch"/{print; next} /"dlls_winex11_drv_bitblt_c.patch"/{print; next} /"dlls_winex11_drv_mouse_c.patch"/{print; next}' "$f" > "$f.tmp"
-              mv "$f.tmp" "$f"
-              echo "Kept mandatory build-fix patches in $f"
-            done
-            python3 scripts/fix_wineboot_c.py wine-source
-            python3 scripts/fix_wdscore.py wine-source
-            python3 scripts/fix_fsync.py wine-source
-            python3 scripts/fix_virtual_c.py wine-source
-            python3 -c "from pathlib import Path; p=Path('wine-source/dlls/winex11.drv/window.c'); s=p.read_text(encoding='utf-8'); old='                /* listen to raw xinput event in the desktop window thread */\n                data->xinput2_rawinput = TRUE;\n                x11drv_xinput2_enable( data->display, DefaultRootWindow( data->display ) );\n'; new='                /* listen to raw xinput event in the desktop window thread */\n#ifndef __ANDROID__\n                data->xinput2_rawinput = TRUE;\n                x11drv_xinput2_enable( data->display, DefaultRootWindow( data->display ) );\n#endif\n'; p.write_text(s.replace(old, new, 1), encoding='utf-8') if old in s and new not in s else None"
-            echo "=== GameNative feature patches disabled; mandatory build fixes kept ==="
-            printf '%s\n' \
-              'dlls_winepulse_drv_pulse_c.patch kept' \
-              'dlls_ntdll_unix_esync_c.patch kept' \
-              'server_esync_c.patch kept' \
-              'dlls_winex11_drv_bitblt_c.patch kept' \
-              'dlls_winex11_drv_mouse_c.patch kept' \
-              'fix_wineboot_c.py kept' \
-              'fix_wdscore.py kept' \
-              'fix_fsync.py kept' \
-              'fix_virtual_c.py kept' \
-              'winex11 window.c Android xinput2_rawinput guard kept via inline build fix' \
-              'repo-side feature patch injection skipped'
-          else
-
-          rm -f wine-source/android/patches/dlls_wow64_syscall_c.patch
-          rm -f wine-source/android/patches/test-bylaws/dlls_wow64_syscall_c.patch
-          rm -f wine-source/android/patches/test-bylaws/dlls_ntdll_signal_arm64ec_c.patch
-          mkdir -p wine-source/android/patches/test-bylaws
-          cp "ge-second-pass/test-bylaws/dlls_wow64_syscall_c.patch" \
-            "wine-source/android/patches/dlls_wow64_syscall_c.patch"
-          cp "ge-second-pass/test-bylaws/dlls_wow64_syscall_c.patch" \
-            "wine-source/android/patches/test-bylaws/dlls_wow64_syscall_c.patch"
-          cp "ge-second-pass/test-bylaws/dlls_ntdll_signal_arm64ec_c.patch" \
-            "wine-source/android/patches/test-bylaws/dlls_ntdll_signal_arm64ec_c.patch"
-          cp "$GITHUB_WORKSPACE/patches/ge-gamenative-firstpass/signal/dlls_ntdll_unix_signal_x86_64_c.patch" \
-            "wine-source/android/patches/dlls_ntdll_unix_signal_x86_64_c.patch"
-          find wine-source/android/patches -type f -name "*.patch" -exec sed -i 's/\r$//' {} +
-
-          OPTIONAL_SHELL32_PATCH="shell32_shlfileop_init_path_components.patch"
-          cp "$GITHUB_WORKSPACE/patches/ge-gamenative-firstpass/shell32/$OPTIONAL_SHELL32_PATCH" \
-            "wine-source/android/patches/$OPTIONAL_SHELL32_PATCH"
-          python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh \
-            "$OPTIONAL_SHELL32_PATCH"
-          python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh \
-            "$OPTIONAL_SHELL32_PATCH"
-          echo "=== shell32 SHFileOperation null-path workaround applied ==="
-          printf '%s\n' "$OPTIONAL_SHELL32_PATCH"
-
-          python3 scripts/fix_preloader_r_debug_noise.py wine-source
-          echo "=== loader _r_debug log noise workaround applied ==="
-
-          python3 scripts/fix_opengl_c.py wine-source
-          echo "=== opengl.c Android GLX workaround applied ==="
-
-          python3 scripts/fix_winemenubuilder_c.py wine-source
-          echo "=== winemenubuilder.c Winlator shortcut workaround applied ==="
-
-          python3 scripts/fix_loader_c.py wine-source
-          echo "=== loader.c Android mallopt guard applied ==="
-
-          python3 scripts/fix_virtual_c.py wine-source
-          python3 scripts/fix_unix_virtual_c.py wine-source
-          echo "=== unix virtual.c Android address-space/writewatch workaround applied ==="
-
-          OPTIONAL_EXPLORER_PATCH="explorer_startmenu_shutdown_latch.patch"
-          cp "$GITHUB_WORKSPACE/patches/ge-gamenative-firstpass/explorer/$OPTIONAL_EXPLORER_PATCH" \
-            "wine-source/android/patches/$OPTIONAL_EXPLORER_PATCH"
-          python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh \
-            "$OPTIONAL_EXPLORER_PATCH"
-          python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh \
-            "$OPTIONAL_EXPLORER_PATCH"
-          echo "=== explorer start menu shutdown workaround applied ==="
-          printf '%s\n' "$OPTIONAL_EXPLORER_PATCH"
-
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.enable_ntsync && 'true' || 'false' }}" = "true" ]; then
-            for ntsync_patch in \
-              0163-ntdll-Retrieve-and-cache-an-ntsync-device-in-wait-ca.patch \
-              0164-server-Add-an-object-operation-to-retrieve-an-in-pro.patch \
-              0165-ntsync-implementation.patch \
-              0166-Finish-up-ntsync-console-implementation.patch \
-              0172-ntdll-ntsync-remove-unused-variable-fix-datatypes.patch; do
-              cp "$GITHUB_WORKSPACE/patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/$ntsync_patch" \
-                "wine-source/android/patches/$ntsync_patch"
-            done
-            python3 scripts/strip_generated_ntsync_patch_sections.py \
-              wine-source/android/patches/0163-ntdll-Retrieve-and-cache-an-ntsync-device-in-wait-ca.patch \
-              wine-source/android/patches/0164-server-Add-an-object-operation-to-retrieve-an-in-pro.patch \
-              wine-source/android/patches/0165-ntsync-implementation.patch \
-              wine-source/android/patches/0166-Finish-up-ntsync-console-implementation.patch \
-              wine-source/android/patches/0172-ntdll-ntsync-remove-unused-variable-fix-datatypes.patch
-            python3 scripts/fix_ntsync_chain.py wine-source
-            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh \
-              0163-ntdll-Retrieve-and-cache-an-ntsync-device-in-wait-ca.patch \
-              0164-server-Add-an-object-operation-to-retrieve-an-in-pro.patch \
-              0165-ntsync-implementation.patch \
-              0166-Finish-up-ntsync-console-implementation.patch \
-              0172-ntdll-ntsync-remove-unused-variable-fix-datatypes.patch
-            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh \
-              0163-ntdll-Retrieve-and-cache-an-ntsync-device-in-wait-ca.patch \
-              0164-server-Add-an-object-operation-to-retrieve-an-in-pro.patch \
-              0165-ntsync-implementation.patch \
-              0166-Finish-up-ntsync-console-implementation.patch \
-              0172-ntdll-ntsync-remove-unused-variable-fix-datatypes.patch
-            python3 scripts/fix_ntsync.py wine-source
-            echo "=== optional ntsync patch series applied ==="
-          fi
-
-          if [ "${{ github.event.inputs.extra_winebus_patches || 'false' }}" = "true" ]; then
-            OPTIONAL_WINEBUS_BASE="https://raw.githubusercontent.com/GloriousEggroll/proton-ge-custom/master/patches/wine-hotfixes/wine-wayland"
-            OPTIONAL_WINEBUS_DIR="wine-source/android/patches/optional-winebus"
-            mkdir -p "$OPTIONAL_WINEBUS_DIR"
-            for patch in \
-              0067-winebus-Ignore-steam-input-virtual-controller-when-P.patch \
-              0083-fixup-winebus-Allow-disabling-steam-input-seperately.patch \
-              0106-winebus-remove-duplicate-code.patch; do
-              wget -q "$OPTIONAL_WINEBUS_BASE/$patch" -O "$OPTIONAL_WINEBUS_DIR/$patch"
-              sed -i 's/\r$//' "$OPTIONAL_WINEBUS_DIR/$patch"
-            done
-            cp "$OPTIONAL_WINEBUS_DIR"/*.patch wine-source/android/patches/
-            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh \
-              0067-winebus-Ignore-steam-input-virtual-controller-when-P.patch \
-              0083-fixup-winebus-Allow-disabling-steam-input-seperately.patch \
-              0106-winebus-remove-duplicate-code.patch
-            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh \
-              0067-winebus-Ignore-steam-input-virtual-controller-when-P.patch \
-              0083-fixup-winebus-Allow-disabling-steam-input-seperately.patch \
-              0106-winebus-remove-duplicate-code.patch
-          fi
-
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.ge_perf_second_pass && 'true' || 'false' }}" = "true" ]; then
-            OPTIONAL_GE_PERF_DIR="wine-source/android/patches/optional-ge-perf"
-            OPTIONAL_GE_PERF_PATCH="6559c43-ntdll-validate-fd-type-in-ioctl-afd-wine-complete-async.patch"
-            OPTIONAL_GE_EVENT_PATCH="dlls_winex11_drv_event_c.patch"
-            OPTIONAL_OPENGL_PERF_PATCH_1="0113-opengl32-Improve-wow64-mapping-performance-by-20x.patch"
-            OPTIONAL_OPENGL_PERF_PATCH_2="0114-HACK-opengl32-Reuse-allocated-memory.patch"
-            OPTIONAL_OPENGL_PERF_PATCH_3="0115-fixup-opengl32-Support-map-buffer-offsets.patch"
-            OPTIONAL_OPENGL_PERF_PATCH_4="0127-opengl32-Use-VirtualAlloc-instead-of-NtAllocateVirtu.patch"
-            mkdir -p "$OPTIONAL_GE_PERF_DIR"
-            cp "$GITHUB_WORKSPACE/ge-second-pass/performance/$OPTIONAL_GE_PERF_PATCH" "$OPTIONAL_GE_PERF_DIR/"
-            cp "$GITHUB_WORKSPACE/patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/$OPTIONAL_OPENGL_PERF_PATCH_1" "$OPTIONAL_GE_PERF_DIR/"
-            cp "$GITHUB_WORKSPACE/patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/$OPTIONAL_OPENGL_PERF_PATCH_2" "$OPTIONAL_GE_PERF_DIR/"
-            cp "$GITHUB_WORKSPACE/patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/$OPTIONAL_OPENGL_PERF_PATCH_3" "$OPTIONAL_GE_PERF_DIR/"
-            cp "$GITHUB_WORKSPACE/patches/ge-wine-only-wrapper/patches/wine-hotfixes/wine-wayland/$OPTIONAL_OPENGL_PERF_PATCH_4" "$OPTIONAL_GE_PERF_DIR/"
-            cp "$OPTIONAL_GE_PERF_DIR"/*.patch wine-source/android/patches/
-            cp "$GITHUB_WORKSPACE/ge-second-pass/mouse/dlls_winex11_drv_mouse_c.patch" "wine-source/android/patches/dlls_winex11_drv_mouse_c.patch"
-            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh \
-              "$OPTIONAL_GE_PERF_PATCH" \
-              "$OPTIONAL_OPENGL_PERF_PATCH_1" \
-              "$OPTIONAL_OPENGL_PERF_PATCH_2" \
-              "$OPTIONAL_OPENGL_PERF_PATCH_3" \
-              "$OPTIONAL_OPENGL_PERF_PATCH_4"
-            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh \
-              "$OPTIONAL_GE_PERF_PATCH" \
-              "$OPTIONAL_OPENGL_PERF_PATCH_1" \
-              "$OPTIONAL_OPENGL_PERF_PATCH_2" \
-              "$OPTIONAL_OPENGL_PERF_PATCH_3" \
-              "$OPTIONAL_OPENGL_PERF_PATCH_4"
-            cp "$GITHUB_WORKSPACE/ge-second-pass/focus/$OPTIONAL_GE_EVENT_PATCH" "$OPTIONAL_GE_PERF_DIR/"
-            cp "$OPTIONAL_GE_PERF_DIR/$OPTIONAL_GE_EVENT_PATCH" wine-source/android/patches/
-            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh "$OPTIONAL_GE_EVENT_PATCH"
-            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh "$OPTIONAL_GE_EVENT_PATCH"
-            echo "=== optional GE performance patch bundle applied ==="
-            printf '%s\n' \
-              "$OPTIONAL_GE_PERF_PATCH" \
-              "$OPTIONAL_OPENGL_PERF_PATCH_1" \
-              "$OPTIONAL_OPENGL_PERF_PATCH_2" \
-              "$OPTIONAL_OPENGL_PERF_PATCH_3" \
-              "$OPTIONAL_OPENGL_PERF_PATCH_4" \
-              "$OPTIONAL_GE_EVENT_PATCH"
-          fi
-
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.ge_compat_patch_bundle && 'true' || 'false' }}" = "true" ]; then
-            OPTIONAL_GE_COMPAT_DIR="wine-source/android/patches/optional-ge-compat"
-            OPTIONAL_D2D_COMPAT_PATCH="fix-a-crash-in-ID2D1DeviceContext-if-no-target-is-set.patch"
-            OPTIONAL_WM_DECOR_PATCH="0001-win32u-add-env-switch-to-disable-wm-decorations.patch"
-            OPTIONAL_REGISTRY_COMPAT_PATCH="registry_RRF_RT_REG_SZ-RRF_RT_REG_EXPAND_SZ.patch"
-            mkdir -p "$OPTIONAL_GE_COMPAT_DIR"
-            cp "$GITHUB_WORKSPACE/patches/ge-wine-only-wrapper/patches/proton/$OPTIONAL_D2D_COMPAT_PATCH" "$OPTIONAL_GE_COMPAT_DIR/"
-            cp "$GITHUB_WORKSPACE/patches/ge-wine-only-wrapper/patches/proton/$OPTIONAL_WM_DECOR_PATCH" "$OPTIONAL_GE_COMPAT_DIR/"
-            cp "$GITHUB_WORKSPACE/patches/ge-wine-only-wrapper/patches/wine-hotfixes/pending/$OPTIONAL_REGISTRY_COMPAT_PATCH" "$OPTIONAL_GE_COMPAT_DIR/"
-            cp "$OPTIONAL_GE_COMPAT_DIR"/*.patch wine-source/android/patches/
-            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh \
-              "$OPTIONAL_D2D_COMPAT_PATCH" \
-              "$OPTIONAL_WM_DECOR_PATCH" \
-              "$OPTIONAL_REGISTRY_COMPAT_PATCH"
-            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh \
-              "$OPTIONAL_D2D_COMPAT_PATCH" \
-              "$OPTIONAL_WM_DECOR_PATCH" \
-              "$OPTIONAL_REGISTRY_COMPAT_PATCH"
-            echo "=== optional GE compatibility patch bundle applied ==="
-            printf '%s\n' \
-              "$OPTIONAL_D2D_COMPAT_PATCH" \
-              "$OPTIONAL_WM_DECOR_PATCH" \
-              "$OPTIONAL_REGISTRY_COMPAT_PATCH"
-          fi
-
-
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dinput_android_compat_workaround && 'true' || 'false' }}" = "true" ]; then
-            OPTIONAL_DINPUT_ANDROID_COMPAT_PATCH="dlls_dinput_android_compat.patch"
-            OPTIONAL_ANDROID_RELATIVE_MOUSE_PATCH="dlls_wineandroid_drv_window_c.patch"
-            cp "$GITHUB_WORKSPACE/ge-second-pass/input/$OPTIONAL_DINPUT_ANDROID_COMPAT_PATCH" "wine-source/android/patches/$OPTIONAL_DINPUT_ANDROID_COMPAT_PATCH"
-            cp "$GITHUB_WORKSPACE/ge-second-pass/input/$OPTIONAL_ANDROID_RELATIVE_MOUSE_PATCH" "wine-source/android/patches/$OPTIONAL_ANDROID_RELATIVE_MOUSE_PATCH"
-            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh "$OPTIONAL_DINPUT_ANDROID_COMPAT_PATCH"
-            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh "$OPTIONAL_DINPUT_ANDROID_COMPAT_PATCH"
-            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh "$OPTIONAL_ANDROID_RELATIVE_MOUSE_PATCH"
-            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh "$OPTIONAL_ANDROID_RELATIVE_MOUSE_PATCH"
-            echo "=== Android input compatibility workarounds applied ==="
-            printf '%s\n' "$OPTIONAL_DINPUT_ANDROID_COMPAT_PATCH" "$OPTIONAL_ANDROID_RELATIVE_MOUSE_PATCH"
-          fi
-
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.input_poll_debug && 'true' || 'false' }}" = "true" ]; then
-            OPTIONAL_INPUT_DEBUG_PATCH="zz_input_poll_debug.patch"
-            OPTIONAL_DINPUT_INSTANCE_DEBUG_PATCH="zz_dinput_instance_debug.patch"
-            cp "$GITHUB_WORKSPACE/ge-second-pass/keyboard/$OPTIONAL_INPUT_DEBUG_PATCH" "wine-source/android/patches/$OPTIONAL_INPUT_DEBUG_PATCH"
-            cp "$GITHUB_WORKSPACE/ge-second-pass/input/$OPTIONAL_DINPUT_INSTANCE_DEBUG_PATCH" "wine-source/android/patches/$OPTIONAL_DINPUT_INSTANCE_DEBUG_PATCH"
-            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh "$OPTIONAL_INPUT_DEBUG_PATCH"
-            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh "$OPTIONAL_INPUT_DEBUG_PATCH"
-            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-arm64ec.sh "$OPTIONAL_DINPUT_INSTANCE_DEBUG_PATCH"
-            python3 scripts/inject_optional_patches.py wine-source/build-scripts/build-step-x86_64.sh "$OPTIONAL_DINPUT_INSTANCE_DEBUG_PATCH"
-            echo "=== Input polling and DirectInput instance debug instrumentation patches applied ==="
-            printf '%s\n' "$OPTIONAL_INPUT_DEBUG_PATCH" "$OPTIONAL_DINPUT_INSTANCE_DEBUG_PATCH"
-          fi
-
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dinput_android_compat_workaround && 'true' || 'false' }}" = "true" ]; then
-            python3 scripts/fix_wineandroid_window_c.py wine-source
-          fi
-          python3 scripts/fix_mouse_c.py wine-source
-          python3 scripts/fix_x11drv_h.py wine-source
-          python3 scripts/fix_x11drv_main_c.py wine-source
-          python3 scripts/filter_patches.py wine-source/build-scripts/build-step-arm64ec.sh wine-source
-          python3 scripts/filter_patches.py wine-source/build-scripts/build-step-x86_64.sh wine-source
-          python3 scripts/patch_build_script.py wine-source/build-scripts/build-step-arm64ec.sh
-          python3 scripts/patch_build_script.py wine-source/build-scripts/build-step-x86_64.sh
-          python3 <<'PY'
-          from pathlib import Path
-
-          drop = {
-              '"dlls_ntdll_unix_virtual_c.patch"',
-              '"test-bylaws/dlls_ntdll_unix_thread_c.patch"',
-          }
-
-          for rel in (
-              "wine-source/build-scripts/build-step-arm64ec.sh",
-              "wine-source/build-scripts/build-step-x86_64.sh",
-          ):
-              path = Path(rel)
-              lines = path.read_text(encoding="utf-8").splitlines()
-              removed = []
-              kept = []
-              for line in lines:
-                  if line.strip() in drop:
-                      removed.append(line.strip().strip('"'))
-                      continue
-                  kept.append(line)
-              path.write_text("\n".join(kept) + "\n", encoding="utf-8")
-              if removed:
-                  print(f"Removed forced patch entries from {path}: {', '.join(removed)}")
-              else:
-                  print(f"No forced patch entries needed removal in {path}")
-          PY
-
-          python3 scripts/fix_window_c.py wine-source
-          python3 scripts/fix_wineboot_c.py wine-source
-          python3 scripts/fix_wdscore.py wine-source
-          python3 scripts/fix_fsync.py wine-source
-
-          echo "=== repo-owned BYLAWS overrides ==="
-          ls -la wine-source/android/patches/test-bylaws | grep -E 'dlls_(wow64_syscall|ntdll_signal_arm64ec)_c\.patch' || true
-          echo "=== fix_test_bylaws_chain.py header ==="
-          sed -n '1,40p' scripts/fix_test_bylaws_chain.py
-          if ! grep -q 'Script rev: 2026-03-07-driftproof-v2' scripts/fix_test_bylaws_chain.py; then echo 'ERROR: stale fix_test_bylaws_chain.py in runner'; exit 97; fi
-          python3 scripts/fix_test_bylaws_chain.py wine-source
-          echo "=== BYLAWS patches applied ==="
-          printf '%s\n' \
-            'dlls_wow64_syscall_c.patch (repo-owned override copied to android/patches and test-bylaws)' \
-            'test-bylaws/dlls_ntdll_signal_arm64ec_c.patch (repo-owned override copied to test-bylaws)'
-          fi
-
-          PROFILE_VERSION="${{ matrix.profile_version }}"
-          TARGET_APP_ID="${{ github.event.inputs.target_app_id || 'app.gamenative' }}"
-          INSTALL_DIR="/data/data/${TARGET_APP_ID}/files/imagefs/opt/proton-${PROFILE_VERSION}"
-          RUNTIME_PATH="/data/data/${TARGET_APP_ID}/files/imagefs/usr"
-          echo "Using target_app_id=$TARGET_APP_ID"
-          echo "Using profile_version=$PROFILE_VERSION"
-          echo "Using install_dir=$INSTALL_DIR"
-          echo "Using RUNTIME_PATH=$RUNTIME_PATH"
-          BUILD_SCRIPT_PATH="wine-source/build-scripts/${{ matrix.build_script }}"
-          INSTALL_DIR="$INSTALL_DIR" RUNTIME_PATH="$RUNTIME_PATH" BUILD_SCRIPT_PATH="$BUILD_SCRIPT_PATH" python3 <<'PY'
-          import os
-          import re
-          from pathlib import Path
-
-          path = Path(os.environ["BUILD_SCRIPT_PATH"])
-          text = path.read_text(encoding="utf-8")
-
-          replacements = [
-              ("install_dir", os.environ["INSTALL_DIR"], False),
-              ("RUNTIME_PATH", os.environ["RUNTIME_PATH"], True),
-          ]
-
-          for name, value, quote in replacements:
-              pattern = re.compile(rf'^(?P<prefix>\s*(?:export\s+)?{re.escape(name)}=).*$',
-                                   re.MULTILINE)
-              replacement_value = f'"{value}"' if quote else value
-              new_text, count = pattern.subn(rf'\g<prefix>{replacement_value}', text, count=1)
-              if count == 0:
-                  line = f'export {name}={replacement_value}'
-                  if not text.endswith("\n"):
-                      text += "\n"
-                  text += f"\n# Added by proton-arm64-nightlies workflow\n{line}\n"
-                  print(f"Appended override for {name} in {path}")
-              else:
-                  text = new_text
-                  print(f"Replaced assignment for {name} in {path}")
-
-          path.write_text(text, encoding="utf-8")
-          print(f"Patched {path}")
-          PY
-
-      - name: Download and extract termuxfs for ${{ matrix.termux_arch }}
-        run: |
-          TERMUX_DIR="$HOME/termuxfs/${{ matrix.termux_arch }}"
-          if [ ! -d "$TERMUX_DIR/data/data/com.termux/files/usr/include" ]; then
-            echo "termuxfs not found, downloading..."
-            mkdir -p "$TERMUX_DIR"
-            cd "$TERMUX_DIR"
-            wget -q "https://github.com/GameNative/termux-on-gha/releases/download/build-20260218/termuxfs-${{ matrix.termux_arch }}.tar"
-            tar -xf "termuxfs-${{ matrix.termux_arch }}.tar"
-            rm -f "termuxfs-${{ matrix.termux_arch }}.tar"
-          else
-            echo "termuxfs already present, skipping download."
-          fi
-
-      - name: Set up Android NDK
-        run: |
-          NDK_DIR="$HOME/Android/Sdk/ndk/27.3.13750724"
-          if [ ! -d "$NDK_DIR" ]; then
-            echo "NDK not found, downloading..."
-            mkdir -p "$HOME/Android/Sdk/ndk"
-            cd "$HOME/Android/Sdk/ndk"
-            wget -q https://dl.google.com/android/repository/android-ndk-r27d-linux.zip
-            unzip -q android-ndk-r27d-linux.zip
-            mv android-ndk-r27d 27.3.13750724
-          else
-            echo "NDK already installed, skipping download."
-          fi
-
-      - name: Set up LLVM MinGW toolchain
-        run: |
-          LLVM_DIR="$HOME/toolchains/llvm-mingw-20250920-ucrt-ubuntu-22.04-x86_64"
-          if [ ! -f "$LLVM_DIR/bin/llvm-dlltool" ]; then
-            echo "LLVM MinGW not found, downloading..."
-            mkdir -p "$HOME/toolchains"
-            cd "$HOME/toolchains"
-            wget -q https://github.com/bylaws/llvm-mingw/releases/download/20250920/llvm-mingw-20250920-ucrt-ubuntu-22.04-x86_64.tar.xz
-            tar -xf llvm-mingw-20250920-ucrt-ubuntu-22.04-x86_64.tar.xz
-          else
-            echo "LLVM MinGW already installed, skipping download."
-          fi
-
-      - name: Add bylaws llvm-mingw to PATH
-        run: |
-          echo "$HOME/toolchains/llvm-mingw-20250920-ucrt-ubuntu-22.04-x86_64/bin" >> "$GITHUB_PATH"
-
-      - name: Run autogen.sh
+      - name: Build Wine
         run: |
           cd wine-source
-          bash autogen.sh
+          bash build.sh --build
 
-      - name: Cache wine-tools
-        id: cache-wine-tools
-        uses: actions/cache@v4
-        with:
-          path: wine-source/wine-tools
-          key: wine-tools-${{ matrix.arch_id }}-${{ hashFiles('wine-source/configure.ac', 'wine-source/configure') }}
-          restore-keys: wine-tools-${{ matrix.arch_id }}-
-
-      - name: Build wine-tools
-        if: steps.cache-wine-tools.outputs.cache-hit != 'true'
+      - name: Install staging
         run: |
           cd wine-source
-          mkdir -p wine-tools
-          cd wine-tools
-          ../configure --without-x --without-gstreamer --without-vulkan --without-wayland --without-xinput2
-          make -j$(nproc) __tooldeps__ nls/all
+          bash build.sh --install
 
-      - name: Build sysvshm library
-        if: matrix.sysvshm
+          OUTPUT="$HOME/${{ matrix.output_dir }}"
+          echo "Installed to $OUTPUT"
+
+      - name: Cleanup
         run: |
-          cd wine-source
-          bash "build-scripts/${{ matrix.build_script }}" --build-sysvshm
+          OUTPUT="$HOME/${{ matrix.output_dir }}"
+          find "$OUTPUT" -name "*.a" -delete || true
+          find "$OUTPUT" -name "*.la" -delete || true
 
-      - name: Configure build
-        id: configure_build
-        continue-on-error: true
+      # =========================
+      # TERMUX DEB PACKAGE
+      # =========================
+      - name: Prepare Termux .deb
+        if: ${{ github.event.inputs.build_termux_deb == 'true' }}
         run: |
-          cd wine-source
-          set -o pipefail
-          bash -e "build-scripts/${{ matrix.build_script }}" --configure 2>&1 | tee configure-run.log
-          test -f Makefile
+          OUTPUT="$HOME/${{ matrix.output_dir }}"
 
-      - name: Dump configure logs
-        if: steps.configure_build.outcome == 'failure'
+          mkdir -p deb/DEBIAN
+          mkdir -p deb/data/data/com.termux/files/usr
+
+          cp -r "$OUTPUT"/* deb/data/data/com.termux/files/usr/ || true
+
+      - name: Create control
+        if: ${{ github.event.inputs.build_termux_deb == 'true' }}
         run: |
-          cd wine-source
-          echo "ERROR: configure stage failed, or a patch/follow-up step inside --configure exited non-zero"
-          echo "=== cwd ==="
-          pwd
-          echo "=== root entries ==="
-          ls -la || true
-          if [ -f ./Makefile ]; then
-            echo "INFO: ./Makefile exists, so configure likely succeeded and a later step failed."
-          else
-            echo "INFO: ./Makefile is missing."
-          fi
-          if [ -f ./configure-run.log ]; then
-            echo "=== tail: ./configure-run.log ==="
-            tail -n 250 ./configure-run.log || true
-          fi
-          find . -maxdepth 2 \( -name config.log -o -name configure.log -o -name config.status \) -print || true
-          if [ -f ./config.log ]; then
-            echo "=== tail: ./config.log ==="
-            tail -n 250 ./config.log || true
-          fi
-          if [ -f ./wine-tools/config.log ]; then
-            echo "=== tail: ./wine-tools/config.log ==="
-            tail -n 120 ./wine-tools/config.log || true
-          fi
-          exit 1
+          cat > deb/DEBIAN/control <<EOF
+Package: proton-termux
+Version: 11.0
+Architecture: arm64
+Maintainer: github-actions
+Depends: libc++, libx11, libxcb, libwayland, libdrm, zlib, zstd
+Description: Proton 11 Termux package
+EOF
 
-      - name: Verify critical patch markers
+      - name: Build .deb
+        if: ${{ github.event.inputs.build_termux_deb == 'true' }}
         run: |
-          python3 scripts/verify_required_markers.py wine-source
+          dpkg-deb -Zxz -z9 --build deb "$HOME/${{ matrix.output_dir }}/proton-termux.deb"
 
-      - name: Build Proton
-        id: build_proton
-        continue-on-error: true
+      # =========================
+      # TERMUX NATIVE PACKAGE (STAGING SYSROOT)
+      # =========================
+      - name: Build Termux native sysroot (aarch64)
+        if: ${{ github.event.inputs.build_termux_native == 'true' }}
         run: |
-          cd wine-source
-          set -o pipefail
-          bash -e "build-scripts/${{ matrix.build_script }}" --build 2>&1 | tee build-run.log
+          SYSROOT="$HOME/termux-native"
+          OUTPUT="$HOME/${{ matrix.output_dir }}"
 
-      - name: Dump build logs
-        if: steps.build_proton.outcome == 'failure'
-        run: |
-          cd wine-source
-          echo "ERROR: build stage failed"
-          if [ -f ./build-run.log ]; then
-            echo "=== error lines from build-run.log ==="
-            grep -nE '(^|[^[:alpha:]])(error:|undefined reference|multiple definition|fatal error:)' ./build-run.log | tail -n 80 || true
-            echo "=== tail: ./build-run.log ==="
-            tail -n 250 ./build-run.log || true
-          fi
-          exit 1
+          rm -rf "$SYSROOT"
+          mkdir -p "$SYSROOT/usr"
 
-      - name: Collect shell32 debug bundle
-        run: |
-          BUNDLE_DIR="$GITHUB_WORKSPACE/output/shell32-debug-${{ matrix.arch_id }}"
-          mkdir -p "$BUNDLE_DIR"
-          mkdir -p "$BUNDLE_DIR/aarch64-windows" "$BUNDLE_DIR/arm64ec-windows" "$BUNDLE_DIR/android-patches"
+          cp -r "$OUTPUT"/* "$SYSROOT/usr/" || true
 
-          cp -f wine-source/dlls/shell32/shfldr_mycomp.c "$BUNDLE_DIR/"
-          cp -f wine-source/dlls/shell32/shlfolder.c "$BUNDLE_DIR/"
-          cp -f wine-source/dlls/shell32/shlfileop.c "$BUNDLE_DIR/"
-          cp -f wine-source/dlls/shell32/pidl.c "$BUNDLE_DIR/"
-          cp -f wine-source/dlls/shell32/shfldr_fs.c "$BUNDLE_DIR/"
-          cp -f wine-source/dlls/shell32/Makefile.in "$BUNDLE_DIR/"
-          cp -f wine-source/build-scripts/${{ matrix.build_script }} "$BUNDLE_DIR/"
-          cp -f wine-source/dlls/shell32/aarch64-windows/shell32.dll "$BUNDLE_DIR/aarch64-windows/" 2>/dev/null || true
-          cp -f wine-source/dlls/shell32/aarch64-windows/*.o "$BUNDLE_DIR/aarch64-windows/" 2>/dev/null || true
-          cp -f wine-source/dlls/shell32/arm64ec-windows/*.o "$BUNDLE_DIR/arm64ec-windows/" 2>/dev/null || true
-          cp -f wine-source/android/patches/shell32_shlfileop_init_path_components.patch "$BUNDLE_DIR/android-patches/" 2>/dev/null || true
-          cp -f wine-source/android/patches/explorer_startmenu_shutdown_latch.patch "$BUNDLE_DIR/android-patches/" 2>/dev/null || true
-          git -C wine-source rev-parse HEAD > "$BUNDLE_DIR/wine_commit.txt"
+          echo "Termux native sysroot prepared"
+          ls -la "$SYSROOT/usr/bin" || true
 
-             # 🔽 Install Proton
-            - name: Install Proton
-              run: |
-                PROFILE_VERSION="${{ matrix.profile_version }}"
-                TARGET_APP_ID="${{ github.event.inputs.target_app_id || 'app.gamenative' }}"
-            
-                sudo mkdir -p "/data/data/${TARGET_APP_ID}/files/imagefs/opt/proton-${PROFILE_VERSION}"
-                sudo chmod -R 777 /data/data
-            
-                cd wine-source
-                bash "build-scripts/${{ matrix.build_script }}" --install
-            
-                OUTPUT_DIR="$HOME/${{ matrix.output_dir }}"
-                echo "=== OUTPUT_DIR ==="
-                ls -la "$OUTPUT_DIR"
-            
-                ensure_launcher() {
-                  local root="$1"
-                  mkdir -p "$root/bin"
-            
-                  if [ ! -e "$root/bin/wine" ]; then
-                    for c in \
-                      "$OUTPUT_DIR/loader64/wine64" \
-                      "$OUTPUT_DIR/loader64/wine64.exe.so"; do
-                      if [ -f "$c" ]; then
-                        cp -f "$c" "$root/bin/wine"
-                        break
-                      fi
-                    done
-                  fi
-                }
-            
-                ensure_launcher "$OUTPUT_DIR"
-            
-            # 🔽 Prepare .deb structure
-            - name: Prepare .deb structure
-              run: |
-                OUTPUT_DIR="$HOME/${{ matrix.output_dir }}"
-            
-                rm -rf deb
-                mkdir -p deb/DEBIAN
-                mkdir -p deb/data/data/com.termux/files/usr/opt/proton
-            
-                echo "Copying files from $OUTPUT_DIR"
-                cp -r "$OUTPUT_DIR/"* \
-                  deb/data/data/com.termux/files/usr/opt/proton/
-            
-                # optional safety cleanup
-                find deb -name "*.a" -delete || true
-                find deb -name "*.la" -delete || true
-                find deb -name "*.o" -delete || true
-            
-            # 🔽 Create launcher
-            - name: Create Termux launcher
-              run: |
-                mkdir -p deb/data/data/com.termux/files/usr/bin
-            
-                cat <<'EOF' > deb/data/data/com.termux/files/usr/bin/proton
-            #!/data/data/com.termux/files/usr/bin/sh
-            export PROTON_DIR=/data/data/com.termux/files/usr/opt/proton
-            export PATH=$PROTON_DIR/bin:$PATH
-            export LD_LIBRARY_PATH=$PROTON_DIR/lib:$LD_LIBRARY_PATH
-            export WINEPREFIX=$HOME/.wine
-            exec $PROTON_DIR/bin/wine "$@"
-            EOF
-            
-                chmod +x deb/data/data/com.termux/files/usr/bin/proton
-            
-            # 🔽 Control file
-            - name: Create control file
-              run: |
-                GIT_HASH=$(git -C wine-source rev-parse --short HEAD)
-            
-                cat <<EOF > deb/DEBIAN/control
-            Package: proton-arm64
-            Version: 11.0-${GIT_HASH}
-            Architecture: aarch64
-            Maintainer: you
-            Depends: libc++, libx11, libxcb, libxshmfence, libwayland, libdrm, zlib, zstd
-            Description: Proton 11 ARM64 converted for Termux
-            EOF
-            
-            # 🔽 Build .deb
-            - name: Build .deb package
-              run: |
-                sudo apt install -y dpkg-dev
-                dpkg-deb -Zxz -z9 --build deb proton-arm64.deb
-            
-            # 🔽 Verify
-            - name: Verify package
-              run: |
-                dpkg-deb -I proton-arm64.deb
-                dpkg-deb -c proton-arm64.deb | head
-            
-            # 🔽 Upload artifact
-            - name: Upload .deb
-              uses: actions/upload-artifact@v4
-              with:
-                name: proton-arm64-deb
-                path: proton-arm64.deb
-      
-      - name: Download prefixPack.txz
-        run: |
-          wget -q "https://github.com/GameNative/bionic-prefix-files/raw/main/${{ matrix.prefix_pack }}" \
-            -O "$HOME/${{ matrix.output_dir }}/prefixPack.txz"
-
-      - name: Verify runtime ABI
-        run: |
-          OUTPUT_DIR="$HOME/${{ matrix.output_dir }}"
-          WINLATOR_APP_ID="${{ github.event.inputs.target_app_id || 'app.gamenative' }}" \
-            bash "$GITHUB_WORKSPACE/scripts/verify-runtime-abi.sh" "$OUTPUT_DIR"
-
-      - name: Generate profile.json files and package
-        run: |
-          OUTPUT_DIR="$HOME/${{ matrix.output_dir }}"
-          GIT_HASH=$(git -C wine-source rev-parse --short HEAD)
-          GIT_DATE=$(git -C wine-source log -1 --format='%cd' --date=format:'%Y%m%d')
-          VERSION="proton-proton_11-${GIT_DATE}-${GIT_HASH}-${{ matrix.arch_id }}"
-          PROFILE_VERSION="${{ matrix.profile_version }}"
-          DISPLAY_NAME="Proton_11 ${{ matrix.display_arch }} ${GIT_DATE} (${GIT_HASH})"
-          DEFAULT_DESCRIPTION="$DISPLAY_NAME"
-          MANUAL_DESCRIPTION="${{ github.event.inputs.release_description || '' }}"
-          if [ -n "$MANUAL_DESCRIPTION" ]; then
-            PROFILE_DESCRIPTION="$DEFAULT_DESCRIPTION | $MANUAL_DESCRIPTION"
-          else
-            PROFILE_DESCRIPTION="$DEFAULT_DESCRIPTION"
-          fi
-          export PROFILE_DESCRIPTION
-
-          mkdir -p "$GITHUB_WORKSPACE/output"
-          PROTON_PROFILE_VERSION="${PROFILE_VERSION}"
-          PROTON_VERSION_CODE=1
-          WINE_VERSION_CODE=0
-
-          python3 scripts/generate_profile.py \
-            "${OUTPUT_DIR}/profile.json" \
-            "${PROTON_PROFILE_VERSION}" \
-            "${PROTON_VERSION_CODE}" \
-            "${PROFILE_DESCRIPTION}" \
-            proton
-
-          bash "$GITHUB_WORKSPACE/scripts/create-proton-wcp.sh" \
-            "$OUTPUT_DIR" \
-            "$GITHUB_WORKSPACE/output/proton-${VERSION}.wcp" \
-            "${PROTON_PROFILE_VERSION}" \
-            "${PROTON_VERSION_CODE}" \
-            "${PROFILE_DESCRIPTION}" \
-            proton
-
-          python3 scripts/generate_profile.py \
-            "${OUTPUT_DIR}/profile.json" \
-            "${PROFILE_VERSION}" \
-            "${WINE_VERSION_CODE}" \
-            "${PROFILE_DESCRIPTION}" \
-            wine
-
-          cd "$OUTPUT_DIR"
-          tar cJf "$GITHUB_WORKSPACE/output/proton-wine-${VERSION}.wcp.xz" \
-            bin lib share prefixPack.txz profile.json
-
-          cd "$GITHUB_WORKSPACE"
-          sha256sum "output/proton-wine-${VERSION}.wcp.xz" > "output/proton-wine-${VERSION}.wcp.xz.sha256"
-
-          WCP_SHA=$(cut -d' ' -f1 "output/proton-${VERSION}.wcp.sha256")
-          WCPXZ_SHA=$(cut -d' ' -f1 "output/proton-wine-${VERSION}.wcp.xz.sha256")
-
-          python3 <<PY
-          import json
-          import os
-          from pathlib import Path
-
-          data = {
-              "arch": "${{ matrix.arch_id }}",
-              "gitHash": "${GIT_HASH}",
-              "gitDate": "${GIT_DATE}",
-              "version": "${VERSION}",
-              "profileVersion": "${PROFILE_VERSION}",
-              "profileDescription": os.environ["PROFILE_DESCRIPTION"],
-              "wcpFile": "proton-${VERSION}.wcp",
-              "wcpSha": "${WCP_SHA}",
-              "wcpxzFile": "proton-wine-${VERSION}.wcp.xz",
-              "wcpxzSha": "${WCPXZ_SHA}",
-          }
-          Path("output/metadata-${{ matrix.arch_id }}.json").write_text(
-              json.dumps(data, indent=2) + "\\n",
-              encoding="utf-8",
-          )
-          print(json.dumps(data, indent=2))
-          PY
-
-          echo "Using profile description: $PROFILE_DESCRIPTION"
-
-          ls -lh output/
-
+      # =========================
+      # UPLOAD
+      # =========================
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: proton-proton_11-${{ matrix.arch_id }}
-          path: output/
-          retention-days: 30
-
-      - name: Upload shell32 debug bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: shell32-debug-${{ matrix.arch_id }}
-          path: output/shell32-debug-${{ matrix.arch_id }}/
+          name: proton-aarch64
+          path: |
+            $HOME/${{ matrix.output_dir }}
+            $HOME/${{ matrix.output_dir }}/proton-termux.deb
+            $HOME/termux-native
           retention-days: 30
 
   release:
-    needs:
-      - prepare
-      - build
-    if: needs.prepare.outputs.skip_build != 'true'
-    runs-on: ${{ github.event.inputs.runner || 'ubuntu-24.04' }}
-    permissions:
-      contents: write
-
+    needs: build
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout this repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: Detect release-worthy changes
-        id: detect_changes
-        run: |
-          python3 <<'PY'
-          import glob
-          import json
-          import os
-          from pathlib import Path
-
-          metas = {}
-          for path in glob.glob("artifacts/**/metadata-*.json", recursive=True):
-              data = json.loads(Path(path).read_text())
-              metas[data["arch"]] = data
-
-          if "arm64ec" not in metas:
-              raise SystemExit("missing metadata file for: arm64ec")
-
-          arm = metas["arm64ec"]
-          latest = json.loads(Path("latest.json").read_text())
-          run_suffix = os.environ['GITHUB_RUN_NUMBER']
-          release_tag = f"proton_11-{arm['gitDate']}-{arm['gitHash']}-run{run_suffix}"
-
-          artifacts = latest.get("artifacts", {})
-          prev_arm = artifacts.get("arm64ec", {})
-
-          prev_arm_wcp = prev_arm.get("wcp", {}).get("sha256") or latest.get("wcp", {}).get("sha256", "")
-          prev_arm_wcpxz = prev_arm.get("wcpxz", {}).get("sha256") or latest.get("wcpxz", {}).get("sha256", "")
-
-          should_release = (
-              arm["gitHash"] != latest.get("gitHash", "")
-              or arm["wcpSha"] != prev_arm_wcp
-              or arm["wcpxzSha"] != prev_arm_wcpxz
-          )
-
-          outputs = {
-              "git_hash": arm["gitHash"],
-              "git_date": arm["gitDate"],
-              "release_tag": release_tag,
-              "should_release": "true" if should_release else "false",
-          }
-
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
-              for key, value in outputs.items():
-                  fh.write(f"{key}={value}\n")
-
-          print(json.dumps({
-              "previousGitHash": latest.get("gitHash", ""),
-              "currentGitHash": arm["gitHash"],
-              "previousArmWcpSha": prev_arm_wcp,
-              "currentArmWcpSha": arm["wcpSha"],
-              "previousArmWcpxzSha": prev_arm_wcpxz,
-              "currentArmWcpxzSha": arm["wcpxzSha"],
-              "shouldRelease": should_release,
-          }, indent=2))
-          PY
-
-      - name: Prepare release files
-        if: steps.detect_changes.outputs.should_release == 'true'
-        run: |
-          mkdir -p release
-          find artifacts -name "*.wcp" -exec cp {} release/ \;
-          find artifacts -name "*.wcp.xz" -exec cp {} release/ \;
-          ls -lah release/
-
-      - name: Create GitHub Release
-        if: steps.detect_changes.outputs.should_release == 'true'
-        run: |
-          GIT_HASH="${{ steps.detect_changes.outputs.git_hash }}"
-          GIT_DATE="${{ steps.detect_changes.outputs.git_date }}"
-          TAG="${{ steps.detect_changes.outputs.release_tag }}"
-          TITLE="Proton_11 ARM64EC (${GIT_DATE})"
-          DEFAULT_NOTES="Built from ValveSoftware/Proton proton_11.0 (wine submodule) @ ${GIT_HASH} with GameNative Android build scripts. Includes ARM64EC packages in the same release. Automated Proton_11 build; use at your own risk."
-          MANUAL_DESCRIPTION="${{ github.event.inputs.release_description || '' }}"
-          if [ -n "$MANUAL_DESCRIPTION" ]; then
-            NOTES="$DEFAULT_NOTES"$'\n\n'"Additional description: $MANUAL_DESCRIPTION"
-          else
-            NOTES="$DEFAULT_NOTES"
-          fi
-          gh release create "$TAG" release/* \
-            --title "$TITLE" \
-            --notes "$NOTES" \
-            --prerelease \
-            || gh release upload "$TAG" release/* --clobber
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Update latest.json
-        if: steps.detect_changes.outputs.should_release == 'true'
-        run: |
-          python3 <<'PY'
-          import glob
-          import json
-          from pathlib import Path
-
-          metas = {}
-          for path in glob.glob("artifacts/**/metadata-*.json", recursive=True):
-              data = json.loads(Path(path).read_text())
-              metas[data["arch"]] = data
-
-          arm = metas["arm64ec"]
-          data = {
-              "versionName": arm["version"],
-              "date": arm["gitDate"],
-              "gitHash": arm["gitHash"],
-              "wcp": {
-                  "fileName": arm["wcpFile"],
-                  "sha256": arm["wcpSha"],
-              },
-              "wcpxz": {
-                  "fileName": arm["wcpxzFile"],
-                  "sha256": arm["wcpxzSha"],
-              },
-              "artifacts": {
-                  "arm64ec": {
-                      "versionName": arm["version"],
-                      "profileVersion": arm["profileVersion"],
-                      "wcp": {
-                          "fileName": arm["wcpFile"],
-                          "sha256": arm["wcpSha"],
-                      },
-                      "wcpxz": {
-                          "fileName": arm["wcpxzFile"],
-                          "sha256": arm["wcpxzSha"],
-                      },
-                  },
-              },
-              "releaseTag": "${{ steps.detect_changes.outputs.release_tag }}",
-          }
-          Path("latest.json").write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-          print(json.dumps(data, indent=2))
-          PY
-
-      - name: Commit latest.json
-        if: steps.detect_changes.outputs.should_release == 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add latest.json
-          GIT_DATE="${{ steps.detect_changes.outputs.git_date }}"
-          git diff --staged --quiet || git commit -m "chore: update latest.json for proton_11.0 ${GIT_DATE}"
-          git pull --rebase origin HEAD
-          git push
-
-      - name: Cleanup runner workspace
-        if: ${{ always() && contains(runner.labels, 'self-hosted') }}
-        run: |
-          set +e
-          echo "=== Disk usage before cleanup ==="
-          df -h
-          rm -rf "$GITHUB_WORKSPACE/wine-source" "$GITHUB_WORKSPACE/gamenative-src" "$GITHUB_WORKSPACE/artifacts" "$GITHUB_WORKSPACE/release" || true
-          rm -rf "$HOME/compiled-files-aarch64" "$HOME/compiled-files-x86_64" "$HOME/wine-staging" || true
-          rm -rf "$RUNNER_TEMP"/* || true
-          echo "=== Disk usage after cleanup ==="
-          df -h
+      - name: Done
+        run: echo "release ready"
