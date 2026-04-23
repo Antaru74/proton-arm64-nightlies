@@ -1,0 +1,104 @@
+name: Build Proton ARM64 Termux
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    env:
+      PREFIX: /data/data/com.termux/files/usr
+      ARCH: aarch64
+
+    steps:
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y \
+          build-essential clang llvm lld \
+          git wget curl autoconf automake libtool \
+          pkg-config flex bison zip unzip python3 \
+          cmake ninja-build meson \
+          mingw-w64 zstd file
+
+    - name: Clone Proton ARM64 Nightlies
+      run: |
+        git clone --recursive https://github.com/Antaru74/proton-arm64-nightlies.git proton
+        cd proton
+
+    - name: Setup toolchain (LLVM-MINGW)
+      run: |
+        wget https://github.com/bylaws/llvm-mingw/releases/download/20250305/llvm-mingw-20250305-ucrt-ubuntu-20.04-x86_64.tar.xz
+        tar -xf llvm-mingw-*.tar.xz
+        echo "$(pwd)/llvm-mingw-*/bin" >> $GITHUB_PATH
+
+    - name: Prepare build directory
+      run: |
+        cd proton
+        mkdir -p build
+
+    - name: Configure Proton (ARM64)
+      run: |
+        cd proton/build
+
+        CC=clang \
+        CXX=clang++ \
+        CFLAGS="-O2 -pipe" \
+        CXXFLAGS="-O2 -pipe" \
+        cmake .. \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=$PREFIX/opt/proton-arm64 \
+          -DARCH=$ARCH \
+          -DENABLE_WINE64=ON \
+          -DENABLE_WINE32=OFF
+
+    - name: Build Proton
+      run: |
+        cd proton/build
+        ninja -j$(nproc)
+
+    - name: Install to staging
+      run: |
+        cd proton/build
+        DESTDIR=$PWD/pkg ninja install
+
+    - name: Strip & cleanup
+      run: |
+        find proton/build/pkg -type f -name "*.a" -delete
+        find proton/build/pkg -type f -name "*.la" -delete
+        strip --strip-unneeded -R .comment -R .note || true
+
+    - name: Create .deb structure
+      run: |
+        mkdir -p deb/DEBIAN
+        mkdir -p deb/data/data/com.termux/files/usr
+
+        cp -r proton/build/pkg/data/data/com.termux/files/usr/* \
+          deb/data/data/com.termux/files/usr/
+
+    - name: Create control file
+      run: |
+        cat <<EOF > deb/DEBIAN/control
+        Package: proton-arm64
+        Version: 1.0-nightly
+        Architecture: arm64
+        Maintainer: Antaru74
+        Depends: libc++, libx11, libxcb, libxshmfence, libwayland, libdrm, zlib, zstd
+        Description: Proton ARM64 Nightly build for Termux
+        EOF
+
+    - name: Build .deb (XZ compressed)
+      run: |
+        dpkg-deb -Zxz -z9 --build deb proton-arm64.deb
+
+    - name: Verify package
+      run: |
+        dpkg-deb -I proton-arm64.deb
+        dpkg-deb -c proton-arm64.deb | head
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: proton-arm64-deb
+        path: proton-arm64.deb
