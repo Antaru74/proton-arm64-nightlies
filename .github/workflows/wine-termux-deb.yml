@@ -73,13 +73,13 @@ jobs:
     # 🔽 Autogen
     - name: Run autogen
       run: |
-        cd wine-source
+        cd $WINE_DIR
         bash autogen.sh
 
     # 🔽 Build wine-tools
     - name: Build wine-tools
       run: |
-        cd wine-source
+        cd $WINE_DIR
         mkdir -p wine-tools
         cd wine-tools
         ../configure --without-x --without-vulkan --without-wayland
@@ -88,21 +88,21 @@ jobs:
     # 🔽 Configure build
     - name: Configure Wine
       run: |
-        cd wine-source
+        cd $WINE_DIR
         bash build-scripts/build-step-arm64ec.sh --configure
 
     # 🔽 Build
     - name: Build Wine
       run: |
-        cd wine-source
+        cd $WINE_DIR
         bash build-scripts/build-step-arm64ec.sh --build
 
     # 🔽 Install (generate compiled-files-aarch64)
     - name: Install Wine
       run: |
-        cd wine-source
+        cd $WINE_DIR
         bash build-scripts/build-step-arm64ec.sh --install
-
+        
     # 🔽 Convert ke .deb
     - name: Prepare .deb structure
       run: |
