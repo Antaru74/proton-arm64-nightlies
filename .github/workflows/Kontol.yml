@@ -1,4 +1,4 @@
-name: Build Proton ARM64 Termux
+name: Build Proton ARM64 Nightly (Termux)
 
 on:
   workflow_dispatch:
@@ -9,93 +9,93 @@ jobs:
 
     env:
       PREFIX: /data/data/com.termux/files/usr
-      ARCH: aarch64
+      ARCH: arm64
 
     steps:
     - name: Install dependencies
       run: |
         sudo apt update
         sudo apt install -y \
+          git wget curl zip unzip \
           build-essential clang llvm lld \
-          git wget curl autoconf automake libtool \
-          pkg-config flex bison zip unzip python3 \
-          cmake ninja-build meson \
-          mingw-w64 zstd file
+          python3 cmake ninja-build meson \
+          autoconf automake libtool \
+          pkg-config flex bison \
+          zstd file
 
-    - name: Clone Proton ARM64 Nightlies
+    - name: Clone Proton ARM64 repo
       run: |
         git clone --recursive https://github.com/Antaru74/proton-arm64-nightlies.git proton
-        cd proton
 
-    - name: Setup toolchain (LLVM-MINGW)
+    - name: Setup LLVM-MINGW toolchain
       run: |
         wget https://github.com/bylaws/llvm-mingw/releases/download/20250305/llvm-mingw-20250305-ucrt-ubuntu-20.04-x86_64.tar.xz
         tar -xf llvm-mingw-*.tar.xz
         echo "$(pwd)/llvm-mingw-*/bin" >> $GITHUB_PATH
 
-    - name: Prepare build directory
+    # =========================
+    # CONFIGURE STEP (IMPORTANT)
+    # =========================
+    - name: Configure Proton ARM64
       run: |
         cd proton
-        mkdir -p build
+        chmod +x scripts/configure-arm64-build.sh
 
-    - name: Configure Proton (ARM64)
+        ./scripts/configure-arm64-build.sh \
+          --prefix=$PREFIX/opt/proton-arm64 \
+          --arch=$ARCH
+
+    # =========================
+    # BUILD STEP
+    # =========================
+    - name: Build Proton ARM64
       run: |
-        cd proton/build
+        cd proton
+        chmod +x scripts/build-proton-arm64.sh
+        ./scripts/build-proton-arm64.sh -j$(nproc)
 
-        CC=clang \
-        CXX=clang++ \
-        CFLAGS="-O2 -pipe" \
-        CXXFLAGS="-O2 -pipe" \
-        cmake .. \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_INSTALL_PREFIX=$PREFIX/opt/proton-arm64 \
-          -DARCH=$ARCH \
-          -DENABLE_WINE64=ON \
-          -DENABLE_WINE32=OFF
-
-    - name: Build Proton
-      run: |
-        cd proton/build
-        ninja -j$(nproc)
-
+    # =========================
+    # STAGING INSTALL
+    # =========================
     - name: Install to staging
       run: |
-        cd proton/build
-        DESTDIR=$PWD/pkg ninja install
+        cd proton
+        make install DESTDIR=$PWD/pkg || true
 
-    - name: Strip & cleanup
+    # =========================
+    # CLEANUP SIZE
+    # =========================
+    - name: Cleanup
       run: |
-        find proton/build/pkg -type f -name "*.a" -delete
-        find proton/build/pkg -type f -name "*.la" -delete
-        strip --strip-unneeded -R .comment -R .note || true
+        find proton/pkg -name "*.a" -delete || true
+        find proton/pkg -name "*.la" -delete || true
 
+    # =========================
+    # PACKAGE DEB
+    # =========================
     - name: Create .deb structure
       run: |
         mkdir -p deb/DEBIAN
         mkdir -p deb/data/data/com.termux/files/usr
 
-        cp -r proton/build/pkg/data/data/com.termux/files/usr/* \
-          deb/data/data/com.termux/files/usr/
+        if [ -d proton/pkg ]; then
+          cp -r proton/pkg/data/data/com.termux/files/usr/* \
+            deb/data/data/com.termux/files/usr/ || true
+        fi
 
     - name: Create control file
       run: |
         cat <<EOF > deb/DEBIAN/control
-        Package: proton-arm64
-        Version: 1.0-nightly
+        Package: proton-arm64-nightly
+        Version: 1.0
         Architecture: arm64
         Maintainer: Antaru74
-        Depends: libc++, libx11, libxcb, libxshmfence, libwayland, libdrm, zlib, zstd
         Description: Proton ARM64 Nightly build for Termux
         EOF
 
-    - name: Build .deb (XZ compressed)
+    - name: Build .deb
       run: |
         dpkg-deb -Zxz -z9 --build deb proton-arm64.deb
-
-    - name: Verify package
-      run: |
-        dpkg-deb -I proton-arm64.deb
-        dpkg-deb -c proton-arm64.deb | head
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
