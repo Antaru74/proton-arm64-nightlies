@@ -34,12 +34,15 @@ jobs:
         git fetch --depth=1 origin $WINE_COMMIT
         git checkout FETCH_HEAD
 
+        cd ../..   # 🔥 INI YANG KURANG
+
     # 🔽 Clone GameNative patches
     - name: Clone GameNative patches
       run: |
         git clone --depth=1 https://github.com/GameNative/proton-wine gamenative-src
-        cp -r gamenative-src/android wine-source/android
-        cp -r gamenative-src/build-scripts wine-source/build-scripts
+
+        cp -r gamenative-src/android proton-source/wine-source/
+        cp -r gamenative-src/build-scripts proton-source/wine-source/
 
     # 🔽 Setup Termux sysroot
     - name: Setup TermuxFS
