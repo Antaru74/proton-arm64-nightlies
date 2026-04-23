@@ -1,4 +1,4 @@
-name: Proton_11 Build
+name: Proton_11 Termux 
 
 on:
   schedule:
